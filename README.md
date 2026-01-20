@@ -37,12 +37,15 @@ uv sync
 ## Pulling Data
 
 To pull a specific dataset:
-
+```bash
 dvc pull data/<dataset_name>
+```
 
 ⚠️ Avoid running:
 
+```bash
 dvc pull
+```
 
 This will pull all datasets, which is usually unnecessary and time-consuming.
 Datasets are expected to live in remote storage and should only be pulled when needed.
@@ -57,9 +60,10 @@ Check out the Git commit or tag corresponding to the desired dataset version
 
 Pull the required data using DVC
 
+```bash
 git checkout <tag-or-commit>
 dvc pull data/<dataset_name>
-
+```
 
 ## Repository Structure
 
@@ -113,10 +117,11 @@ Open Questions / Future Improvements
 Should we provide a small CLI or Python interface around DVC?
 Example:
 
+```code
 get_data_by_tag(tag, dataset):
     git checkout tag
     dvc pull data/<dataset>
-
+```
 
 How strictly should preprocessing logic live in this repo vs. project-specific repos?
 
@@ -158,7 +163,6 @@ These are optional, but I’d strongly consider them.
 
 Describe expectations for datasets:
 
-```markdown
 ## Data Contract
 
 Each dataset should:
