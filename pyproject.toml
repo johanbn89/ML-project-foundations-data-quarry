@@ -9,6 +9,7 @@ dependencies = [
     "dvc>=3.66.1",
     "mypy>=1.19.1",
     "platformdirs>=4.5.1",
+    "pre-commit>=4.5.1",
     "ruff>=0.14.13",
     "tomli-w>=1.2.0",
     "typer>=0.21.1",
@@ -23,3 +24,33 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.mypy]
+# If a dependency doesn’t ship type hints, don’t fail my build because of it
+ignore_missing_imports = true
+disallow_untyped_defs = false
+cache_dir = ".mypy_cache"
+incremental = true
+
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+fix = true
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "I",  # isort (import sorting)
+]
+ignore = [
+    "E501",  # line length (handled by black)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ml_project_foundations"]
+
+[tool.black]
+line-length = 120
+target-version = ["py312"]
