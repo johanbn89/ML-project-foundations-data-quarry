@@ -1,0 +1,9 @@
+# Python
+dist/
+build/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# VSCode
+.vscode/
