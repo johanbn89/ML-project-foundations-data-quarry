@@ -67,36 +67,48 @@ dvc pull data/<dataset_name>
 
 ## Repository Structure
 
-Each dataset lives in its own directory under data/.
+Each dataset lives in its own directory under `data/`.
 
+```text
 data/
-  cats/
-    cats.dvc
-    utils/
-      preprocess.py
-      transform.py
-    raw/
-      file1
-      ...
-      fileN
-    processed/
-      file1
-      ...
-      fileN
-
-  dogs/
-    dogs.dvc
-    utils/
-      preprocess.py
-      transform.py
-    raw/
-      file1
-      ...
-      fileN
-    processed/
-      file1
-      ...
-      fileN
+├─ cats/
+│  ├─ README.md
+│  ├─ cats.dvc
+│  ├─ utils/
+│  │  ├─ preprocess.py
+│  │  └─ transform.py
+│  ├─ raw/
+│  │  ├─ file1
+│  │  └─ ...
+│  │     fileN
+│  ├─ processed/
+│  │  ├─ file1
+│  │  └─ ...
+│  │     fileN
+│  └─ target/
+│     ├─ file1
+│     └─ ...
+│        fileN
+│
+└─ dogs/
+   ├─ README.md
+   ├─ dogs.dvc
+   ├─ utils/
+   │  ├─ preprocess.py
+   │  └─ transform.py
+   ├─ raw/
+   │  ├─ file1
+   │  └─ ...
+   │     fileN
+   ├─ processed/
+   │  ├─ file1
+   │  └─ ...
+   │     fileN
+   └─ target/
+      ├─ file1
+      └─ ...
+         fileN
+```
 
 ## Directory Conventions
 
