@@ -8,6 +8,7 @@ dependencies = [
     "black>=25.12.0",
     "dvc>=3.66.1",
     "mypy>=1.19.1",
+    "numpy>=2.4.1",
     "platformdirs>=4.5.1",
     "pre-commit>=4.5.1",
     "ruff>=0.14.13",
