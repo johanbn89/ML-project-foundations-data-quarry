@@ -8,6 +8,7 @@ _Describe what this dataset is and what it’s for._
 |---|---|---|---|---|
 | `raw` | _…_ | _…_ | _…_ | `dataset1-v1` |
 | `raw` | _…_ | _…_ | _…_ | `dataset1-v2` |
+| `raw` | _…_ | _…_ | _…_ | `dataset1-v3` |
 
 ### `target`
 
@@ -15,3 +16,4 @@ _Describe what this dataset is and what it’s for._
 |---|---|---|---|---|
 | `target` | _…_ | _…_ | _…_ | `dataset1-v1` |
 | `target` | _…_ | _…_ | _…_ | `dataset1-v2` |
+| `target` | _…_ | _…_ | _…_ | `dataset1-v3` |

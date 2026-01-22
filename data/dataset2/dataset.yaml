@@ -11,7 +11,8 @@ components:
     produced_by: null
     tags:
     - dataset2-v2
-    tag: dataset2-v2
+    - dataset2-v3
+    tag: dataset2-v3
   target:
     path: target
     description: ''
@@ -19,5 +20,6 @@ components:
     produced_by: null
     tags:
     - dataset2-v2
-    tag: dataset2-v2
-tag_version: 2
+    - dataset2-v3
+    tag: dataset2-v3
+tag_version: 3
