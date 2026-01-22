@@ -12,7 +12,12 @@ repos:
       - id: black
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
+    rev: v1.19.1 # whatever you use
     hooks:
       - id: mypy
         args: ["--explicit-package-bases"]
+        additional_dependencies:
+          - types-PyYAML
+          - types-Jinja2
+          - PyYAML
+          - Jinja2
