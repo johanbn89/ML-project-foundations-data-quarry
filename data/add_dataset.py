@@ -37,6 +37,23 @@ Notes:
 - Only components passed via --components are treated as dataset data components.
 - If --dvc is set, it only DVC-adds those explicit components.
 - Non-component folders (e.g. utils/) are ignored unless explicitly listed.
+
+
+Local developer tool (not part of the package).
+
+Creates/updates:
+- data/<dataset_name>/dataset.yaml  (single source of truth metadata)
+- data/<dataset_name>/README.md     (generated blocks + freeform outside markers)
+- data/datasets.md                 (table generated from dataset.yaml files)
+
+Explicit components (recommended):
+  uv run python data/add_dataset.py --name dataset1 --tag mytag --version 0.1.0 --components raw target --dvc
+
+Notes:
+- This script will NOT auto-discover components from folders.
+- Only components passed via --components are treated as dataset data components.
+- If --dvc is set, it only DVC-adds those explicit components.
+- Non-component folders (e.g. utils/) are ignored unless explicitly listed.
 """
 
 from __future__ import annotations
@@ -46,7 +63,7 @@ import datetime as dt
 import re
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Set
 
 # Repo layout
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -84,24 +101,24 @@ def _yaml_dump(obj: Any, indent: int = 0) -> str:
     if isinstance(obj, list):
         if not obj:
             return "[]"
-        out: List[str] = []
+        list_lines: List[str] = []
         for item in obj:
             if isinstance(item, (dict, list)):
-                out.append(f"{sp}- {_yaml_dump(item, indent + 1).lstrip()}")
+                list_lines.append(f"{sp}- {_yaml_dump(item, indent + 1).lstrip()}")
             else:
-                out.append(f"{sp}- {_yaml_dump(item, 0)}")
-        return "\n".join(out)
+                list_lines.append(f"{sp}- {_yaml_dump(item, 0)}")
+        return "\n".join(list_lines)
     if isinstance(obj, dict):
         if not obj:
             return "{}"
-        out: List[str] = []
+        dict_lines: List[str] = []
         for k, v in obj.items():
             if isinstance(v, (dict, list)):
-                out.append(f"{sp}{k}:")
-                out.append(_yaml_dump(v, indent + 1))
+                dict_lines.append(f"{sp}{k}:")
+                dict_lines.append(_yaml_dump(v, indent + 1))
             else:
-                out.append(f"{sp}{k}: {_yaml_dump(v, 0)}")
-        return "\n".join(out)
+                dict_lines.append(f"{sp}{k}: {_yaml_dump(v, 0)}")
+        return "\n".join(dict_lines)
     raise TypeError(f"Unsupported type for yaml dump: {type(obj)}")
 
 
@@ -143,7 +160,7 @@ def _yaml_load(text: str) -> Dict[str, Any]:
     def parse_block(base_indent: int) -> Any:
         nonlocal i
         mapping: Dict[str, Any] = {}
-        sequence: List[Any] = []
+        sequence_items: List[Any] = []
         mode: Optional[str] = None  # "map" | "seq"
 
         while i < len(lines):
@@ -171,7 +188,7 @@ def _yaml_load(text: str) -> Dict[str, Any]:
                 i += 1
 
                 if item_str == "":
-                    sequence.append(parse_block(base_indent + 2))
+                    sequence_items.append(parse_block(base_indent + 2))
                     continue
 
                 if ":" in item_str and not item_str.startswith('"'):
@@ -179,20 +196,20 @@ def _yaml_load(text: str) -> Dict[str, Any]:
                     k, v = item_str.split(":", 1)
                     k = k.strip()
                     v = v.strip()
-                    item: Dict[str, Any] = {}
+                    item_map: Dict[str, Any] = {}
                     if v == "":
-                        item[k] = parse_block(base_indent + 4)
+                        item_map[k] = parse_block(base_indent + 4)
                     else:
-                        item[k] = parse_scalar(v)
+                        item_map[k] = parse_scalar(v)
 
                     # merge subsequent indented keys
                     if i < len(lines) and current_indent(lines[i]) >= base_indent + 2:
                         extra = parse_block(base_indent + 2)
                         if isinstance(extra, dict):
-                            item.update(extra)
-                    sequence.append(item)
+                            item_map.update(extra)
+                    sequence_items.append(item_map)
                 else:
-                    sequence.append(parse_scalar(item_str))
+                    sequence_items.append(parse_scalar(item_str))
             else:
                 if mode is None:
                     mode = "map"
@@ -202,15 +219,15 @@ def _yaml_load(text: str) -> Dict[str, Any]:
                 if ":" not in s:
                     break
                 k, v = s.split(":", 1)
-                k = k.strip()
-                v = v.strip()
+                key = k.strip()
+                val = v.strip()
                 i += 1
-                if v == "":
-                    mapping[k] = parse_block(base_indent + 2)
+                if val == "":
+                    mapping[key] = parse_block(base_indent + 2)
                 else:
-                    mapping[k] = parse_scalar(v)
+                    mapping[key] = parse_scalar(val)
 
-        return sequence if mode == "seq" else mapping
+        return sequence_items if mode == "seq" else mapping
 
     parsed = parse_block(0)
     if not isinstance(parsed, dict):
@@ -244,9 +261,9 @@ def _replace_block(original: str, *, start_marker: str, end_marker: str, new_bod
     # Insert after first H1 if present, else prepend.
     lines = original.splitlines(True)
     insert_at = 0
-    for i, line in enumerate(lines[:30]):
+    for idx, line in enumerate(lines[:30]):
         if line.startswith("# "):
-            insert_at = i + 1
+            insert_at = idx + 1
             if insert_at < len(lines) and lines[insert_at].strip() == "":
                 insert_at += 1
             break
@@ -297,25 +314,25 @@ def _save_dataset_yaml(path: Path, data: Dict[str, Any], *, dry_run: bool) -> No
     _write_text(path, content, dry_run=dry_run)
 
 
-def _normalize_component_names(component_names: List[str]) -> List[str]:
+def _normalize_component_names(component_names: Sequence[str]) -> List[str]:
     # Keep order but remove duplicates, strip slashes
-    out: List[str] = []
-    seen: set[str] = set()
+    normalized: List[str] = []
+    seen: Set[str] = set()
     for c in component_names:
-        c2 = c.strip().strip("/\\")
+        c2 = str(c).strip().strip("/\\")
         if not c2:
             continue
         if c2 in seen:
             continue
         seen.add(c2)
-        out.append(c2)
-    return out
+        normalized.append(c2)
+    return normalized
 
 
 def _ensure_explicit_component_entries(
     meta: Dict[str, Any],
     dataset_dir: Path,
-    component_names: List[str],
+    component_names: Sequence[str],
     *,
     prune_to_explicit: bool,
 ) -> None:
@@ -324,25 +341,31 @@ def _ensure_explicit_component_entries(
     - Ensures YAML has entries for each explicit component
     - Optionally prunes YAML components to exactly the explicit set
     """
-    component_names = _normalize_component_names(component_names)
+    normalized = _normalize_component_names(component_names)
 
-    meta["components"] = meta.get("components") if isinstance(meta.get("components"), dict) else {}
-    comp_map: Dict[str, Any] = meta["components"]
+    meta_components = meta.get("components")
+    if not isinstance(meta_components, dict):
+        meta_components = {}
+        meta["components"] = meta_components
+
+    comp_map: Dict[str, Any] = meta_components
 
     if prune_to_explicit:
-        keep = set(component_names)
+        keep = set(normalized)
         for k in list(comp_map.keys()):
             if k not in keep:
                 del comp_map[k]
 
-    for c in component_names:
+    for c in normalized:
         (dataset_dir / c).mkdir(parents=True, exist_ok=True)
-        if c not in comp_map or not isinstance(comp_map.get(c), dict):
-            comp_map[c] = {}
-        comp_map[c].setdefault("path", c)
-        comp_map[c].setdefault("description", "")
-        comp_map[c].setdefault("schema", None)
-        comp_map[c].setdefault("produced_by", None)
+        entry = comp_map.get(c)
+        if not isinstance(entry, dict):
+            entry = {}
+            comp_map[c] = entry
+        entry.setdefault("path", c)
+        entry.setdefault("description", "")
+        entry.setdefault("schema", None)
+        entry.setdefault("produced_by", None)
 
 
 def _make_readme_from_yaml(meta: Dict[str, Any], dataset_dir: Path, existing: str) -> str:
@@ -354,7 +377,6 @@ def _make_readme_from_yaml(meta: Dict[str, Any], dataset_dir: Path, existing: st
     sources = (lineage.get("sources") or []) if isinstance(lineage, dict) else []
     transforms = (lineage.get("transforms") or []) if isinstance(lineage, dict) else []
 
-    # Metadata block (from YAML)
     meta_lines = [
         f"- **Name:** `{meta.get('name', name)}`",
         f"- **Tag:** `{meta.get('tag', '')}`",
@@ -398,7 +420,6 @@ def _make_readme_from_yaml(meta: Dict[str, Any], dataset_dir: Path, existing: st
     else:
         meta_lines.append("- _Add transforms in `dataset.yaml` under `lineage.transforms`._")
 
-    # Components block (from YAML components only)
     comp_lines = ["## Components", ""]
     components = meta.get("components") or {}
 
@@ -420,44 +441,47 @@ def _make_readme_from_yaml(meta: Dict[str, Any], dataset_dir: Path, existing: st
             "",
         ]
 
-    out = existing
-    out = _replace_block(
-        out, start_marker=README_MARK_META_START, end_marker=README_MARK_META_END, new_body="\n".join(meta_lines)
+    out_text = existing
+    out_text = _replace_block(
+        out_text,
+        start_marker=README_MARK_META_START,
+        end_marker=README_MARK_META_END,
+        new_body="\n".join(meta_lines),
     )
-    out = _replace_block(
-        out,
+    out_text = _replace_block(
+        out_text,
         start_marker=README_MARK_COMPONENTS_START,
         end_marker=README_MARK_COMPONENTS_END,
         new_body="\n".join(comp_lines),
     )
 
-    if not out.lstrip().startswith("# "):
-        out = f"# Dataset: `{name}`\n\n" + out
+    if not out_text.lstrip().startswith("# "):
+        out_text = f"# Dataset: `{name}`\n\n" + out_text
 
-    return out.rstrip() + "\n"
+    return out_text.rstrip() + "\n"
 
 
-def _find_all_dataset_yamls() -> list[Path]:
+def _find_all_dataset_yamls() -> List[Path]:
     if not DATA_DIR.exists():
         return []
-    out: list[Path] = []
+    yamls: List[Path] = []
     for p in sorted(DATA_DIR.iterdir()):
         if not p.is_dir() or p.name.startswith("."):
             continue
         y = _dataset_yaml_path(p)
         if y.exists():
-            out.append(y)
-    return out
+            yamls.append(y)
+    return yamls
 
 
-def _make_index_table(all_meta: list[Dict[str, Any]]) -> str:
+def _make_index_table(all_meta: List[Dict[str, Any]]) -> str:
     header = "| Dataset | Tag | Version | Status | Components | README |\n|---|---|---|---|---:|---|\n"
-    lines = [header]
+    lines: List[str] = [header]
     for m in sorted(all_meta, key=lambda x: str(x.get("name", "")).lower()):
-        name = m.get("name", "")
-        tag = m.get("tag", "")
-        version = m.get("version", "")
-        status = m.get("status", "")
+        name = str(m.get("name", ""))
+        tag = str(m.get("tag", ""))
+        version = str(m.get("version", ""))
+        status = str(m.get("status", ""))
         comps = m.get("components") or {}
         ncomps = len(comps) if isinstance(comps, dict) else 0
 
@@ -470,7 +494,7 @@ def _make_index_table(all_meta: list[Dict[str, Any]]) -> str:
     return "".join(lines)
 
 
-def _update_datasets_md(all_meta: list[Dict[str, Any]], *, dry_run: bool) -> None:
+def _update_datasets_md(all_meta: List[Dict[str, Any]], *, dry_run: bool) -> None:
     existing = _read_text(DATASETS_INDEX)
     if not existing.strip():
         existing = (
@@ -488,8 +512,8 @@ def _update_datasets_md(all_meta: list[Dict[str, Any]], *, dry_run: bool) -> Non
 # -----------------------------
 # DVC helpers (explicit)
 # -----------------------------
-def _dvc_add_components(dataset_dir: Path, component_names: List[str], *, dry_run: bool) -> None:
-    component_names = _normalize_component_names(component_names)
+def _dvc_add_components(dataset_dir: Path, component_names: Sequence[str], *, dry_run: bool) -> None:
+    normalized = _normalize_component_names(component_names)
 
     def run_add(path: Path) -> int:
         if dry_run:
@@ -508,7 +532,7 @@ def _dvc_add_components(dataset_dir: Path, component_names: List[str], *, dry_ru
                 print(msg)
         return res.returncode
 
-    for comp in component_names:
+    for comp in normalized:
         comp_path = dataset_dir / comp
         dvc_file = dataset_dir / f"{comp}.dvc"
         if dvc_file.exists():
@@ -570,6 +594,7 @@ def main() -> int:
     meta["status"] = args.status
     meta["owner"] = args.owner or meta.get("owner", "")
     meta["license"] = args.license or meta.get("license", "internal")
+
     if args.description:
         meta["description"] = args.description
     else:
@@ -602,11 +627,12 @@ def main() -> int:
     print(f"Updated {readme_path.relative_to(REPO_ROOT)}")
 
     # 4) datasets.md rebuild from all dataset.yaml
-    all_meta: list[Dict[str, Any]] = []
+    all_meta: List[Dict[str, Any]] = []
     for y in _find_all_dataset_yamls():
         m = _load_dataset_yaml(y)
         if m.get("name"):
             all_meta.append(m)
+
     if not any(m.get("name") == args.name for m in all_meta):
         all_meta.append(meta)
 
@@ -617,7 +643,7 @@ def main() -> int:
     if args.dvc:
         _dvc_add_components(dataset_dir, args.components or [], dry_run=args.dry_run)
 
-    # 6) Next steps
+    # 6) Next steps (Windows-friendly: cmd.exe doesn't expand ** globs)
     print("\nNext:")
     add_parts = [
         str(yaml_path.relative_to(REPO_ROOT)),
@@ -625,11 +651,9 @@ def main() -> int:
         str(DATASETS_INDEX.relative_to(REPO_ROOT)),
     ]
     print("  git add " + " ".join(add_parts))
-    if args.dvc and args.components:
-        # likely dvc files + gitignores were created in dataset_dir
-        print(
-            f"  git add {dataset_dir.relative_to(REPO_ROOT)}/**/*.dvc {dataset_dir.relative_to(REPO_ROOT)}/.gitignore"
-        )
+    if args.dvc:
+        print("  git add *.dvc")
+        print(f"  git add {dataset_dir.relative_to(REPO_ROOT)}/.gitignore")
     print(f'  git commit -m "Add/update dataset {args.name}"')
 
     return 0
