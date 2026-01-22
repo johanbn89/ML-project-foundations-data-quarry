@@ -486,8 +486,8 @@ def _make_index_table(all_meta: List[Dict[str, Any]]) -> str:
         ncomps = len(comps) if isinstance(comps, dict) else 0
 
         ds_dir = DATA_DIR / name
-        ds_rel = ds_dir.relative_to(REPO_ROOT).as_posix()
-        readme_rel = (ds_dir / "README.md").relative_to(REPO_ROOT).as_posix()
+        ds_rel = ds_dir.relative_to(DATA_DIR).as_posix()
+        readme_rel = (ds_dir / "README.md").relative_to(DATA_DIR).as_posix()
         ds_link = f"[`{name}`]({ds_rel}/)"
         readme_link = f"[README]({readme_rel})"
         lines.append(f"| {ds_link} | `{tag}` | `{version}` | `{status}` | {ncomps} | {readme_link} |\n")
