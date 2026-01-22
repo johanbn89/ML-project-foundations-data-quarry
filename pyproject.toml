@@ -55,3 +55,8 @@ known-first-party = ["ml_project_foundations"]
 [tool.black]
 line-length = 120
 target-version = ["py312"]
+
+[dependency-groups]
+dev = [
+    "ipython>=9.9.0",
+]

@@ -40,9 +40,8 @@ def get_file_paths(
     so the caller's working directory is unaffected. Note that the repo working tree itself
     *will* change to the requested ref.
 
-    Requirements:
-    - DATA_REPO_ROOT must be set
-    - DATA_ROOT must be set
+    Example:
+      files = get_file_paths(dataset="my-dataset", ref="v1.0", components=["raw", "target"])
     """
 
     repo_root_str = _require_env("DATA_REPO_ROOT")
