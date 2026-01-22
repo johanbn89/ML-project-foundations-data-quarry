@@ -3,7 +3,7 @@ updated: '2026-01-22'
 name: dataset2
 status: draft
 description: ''
-tag_version: 4
+tag_version: 1
 components:
   raw:
     path: raw
@@ -11,21 +11,15 @@ components:
     schema: null
     produced_by: null
     tags:
-    - dataset2-raw-v0
-    - dataset2-raw-v1
-    - dataset2-raw-v2
-    - dataset2-raw-v3
-    - dataset2-raw-v4
-    tag: dataset2-raw-v4
+    - dataset2-v0
+    - dataset2-v1
+    tag: dataset2-v1
   target:
     path: target
     description: ''
     schema: null
     produced_by: null
     tags:
-    - dataset2-target-v0
-    - dataset2-target-v1
-    - dataset2-target-v2
-    - dataset2-target-v3
-    - dataset2-target-v4
-    tag: dataset2-target-v4
+    - dataset2-v0
+    - dataset2-v1
+    tag: dataset2-v1
