@@ -89,6 +89,8 @@ def _collect_files(dataset_dir: Path, components: Sequence[str]) -> DatasetFiles
         raw/
         target/
         metadata/
+    Example call:
+      _collect_files(dataset_dir, ['raw', 'target'])
     """
     result: DatasetFiles = {}
 
