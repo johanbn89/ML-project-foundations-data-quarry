@@ -1,0 +1,7 @@
+# Ignore helper code in any dataset
+*/utils/
+
+# Ignore dataset metadata & docs inside each dataset folder
+*/dataset.yaml
+*/README.md
+*/.gitignore

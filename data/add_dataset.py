@@ -1,3 +1,4 @@
+# data/add_dataset.py
 from __future__ import annotations
 
 import argparse
@@ -12,6 +13,9 @@ from jinja2 import Environment, StrictUndefined
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 DATA_INDEX_MD = DATA_DIR / "README.md"
+
+# DVC-tracked data lives under data/<dataset>/dvc/<component>
+DVC_SUBDIR_NAME = "dvc"
 
 README_TEMPLATE = r"""# Dataset: `{{ name }}`
 
@@ -29,14 +33,14 @@ _Describe what this dataset is and what it’s for._
 
 ### `{{ cname }}`
 
-| Folder | Description | Schema | Produced by | Tag |
-|---|---|---|---|---|
-{% if c.tags %}
-{% for t in c.tags %}
-| `{{ c.path }}` | {{ c.description or "_…_" }} | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} | `{{ t }}` |
+| Folder | Description | Schema | Produced by | Tag | Changed |
+|---|---|---|---|---|---|
+{% if c.history %}
+{% for row in c.history %}
+| `{{ c.path }}` | {{ c.description or "_…_" }} | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} | `{{ row.tag }}` | `{{ row.changed }}` |
 {% endfor %}
 {% else %}
-| `{{ c.path }}` | {{ c.description or "_…_" }} | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} | `{{ c.tag }}` |
+| `{{ c.path }}` | {{ c.description or "_…_" }} | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} | `{{ c.tag }}` | `{{ "yes" if c.changed else "no" }}` |
 {% endif %}
 
 {%- endfor %}
@@ -74,6 +78,20 @@ def _as_dict(value: Any) -> Dict[str, Any]:
     return {}
 
 
+def _as_list_of_dicts(value: Any) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, dict):
+            d: Dict[str, Any] = {}
+            for k, v in item.items():
+                if isinstance(k, str):
+                    d[k] = v
+            out.append(d)
+    return out
+
+
 def _read_yaml(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
@@ -108,15 +126,11 @@ def _dataset_tag(dataset_name: str, tag_version: int) -> str:
     return f"{dataset_name}-v{tag_version}"
 
 
-def _ensure_components(
-    meta: Dict[str, Any],
-    dataset_dir: Path,
-    components: List[str],
-    *,
-    prev_tag_version: int,
-    tag_version: int,
-    changed_any: bool,
-) -> None:
+def _ensure_components_structure(meta: Dict[str, Any], dataset_dir: Path, components: List[str]) -> None:
+    """
+    Ensure YAML has component entries and that DVC directory structure exists.
+    Does NOT append version history.
+    """
     meta_components = _as_dict(meta.get("components"))
     meta["components"] = meta_components
 
@@ -125,13 +139,11 @@ def _ensure_components(
         if existing not in keep:
             del meta_components[existing]
 
-    dataset_name = str(meta.get("name", "") or "")
-
-    new_tag = _dataset_tag(dataset_name, tag_version)
-    prev_tag = _dataset_tag(dataset_name, prev_tag_version)
+    dvc_root = dataset_dir / DVC_SUBDIR_NAME
+    dvc_root.mkdir(parents=True, exist_ok=True)
 
     for cname in components:
-        (dataset_dir / cname).mkdir(parents=True, exist_ok=True)
+        (dvc_root / cname).mkdir(parents=True, exist_ok=True)
 
         entry = _as_dict(meta_components.get(cname))
         meta_components[cname] = entry
@@ -141,20 +153,41 @@ def _ensure_components(
         entry.setdefault("schema", None)
         entry.setdefault("produced_by", None)
 
-        tags_val = entry.get("tags", [])
-        tags: List[str] = tags_val if isinstance(tags_val, list) else []
-        tags = [str(t) for t in tags if str(t)]
+        # Versioning fields (dataset-wide)
+        entry.setdefault("tag", "")
+        entry.setdefault("changed", False)
+        entry.setdefault("history", [])
 
-        # Grow history when we bump:
-        if changed_any:
-            # Seed previous tag on first bump so the table grows immediately
-            if not tags and prev_tag != new_tag:
-                tags.append(prev_tag)
-            if not tags or tags[-1] != new_tag:
-                tags.append(new_tag)
 
-        entry["tags"] = tags
-        entry["tag"] = tags[-1] if tags else new_tag
+def _update_component_history_on_version(
+    meta: Dict[str, Any],
+    components: List[str],
+    *,
+    prev_tag: str,
+    new_tag: str,
+    changed_any: bool,
+) -> None:
+    """
+    Append a history row for every component for the new dataset version.
+    The 'changed' flag is dataset-wide (same for all components).
+    """
+    meta_components = _as_dict(meta.get("components"))
+
+    for cname in components:
+        entry = _as_dict(meta_components.get(cname))
+        meta_components[cname] = entry
+
+        history = _as_list_of_dicts(entry.get("history"))
+        entry["history"] = history
+
+        # Seed previous version if history is empty so tables grow immediately
+        if not history and prev_tag != new_tag:
+            history.append({"tag": prev_tag, "changed": "n/a"})
+
+        history.append({"tag": new_tag, "changed": "yes" if changed_any else "no"})
+
+        entry["tag"] = new_tag
+        entry["changed"] = changed_any
 
 
 def _render_readme(meta: Dict[str, Any]) -> str:
@@ -170,16 +203,25 @@ def _render_readme(meta: Dict[str, Any]) -> str:
     safe_components: Dict[str, Dict[str, Any]] = {}
     for cname in components_order:
         raw = _as_dict(components.get(cname))
-        tags_val = raw.get("tags", [])
-        tags = [str(t) for t in tags_val] if isinstance(tags_val, list) else []
+        history_raw = _as_list_of_dicts(raw.get("history"))
+
+        history: List[Dict[str, str]] = []
+        for row in history_raw:
+            history.append(
+                {
+                    "tag": str(row.get("tag", "")),
+                    "changed": str(row.get("changed", "")),
+                }
+            )
 
         safe_components[cname] = {
-            "path": raw.get("path", cname),
-            "description": raw.get("description", ""),
+            "path": str(raw.get("path", cname)),
+            "description": str(raw.get("description", "")),
             "schema": raw.get("schema", None),
             "produced_by": raw.get("produced_by", None),
-            "tag": raw.get("tag", ""),
-            "tags": tags,
+            "tag": str(raw.get("tag", "")),
+            "changed": bool(raw.get("changed", False)),
+            "history": history,
         }
 
     return (
@@ -237,9 +279,9 @@ def _read_bytes_if_exists(path: Path) -> bytes:
     return path.read_bytes() if path.exists() else b""
 
 
-def _run_dvc_add(component_path: Path) -> Tuple[int, str]:
+def _run_dvc_add(path: Path) -> Tuple[int, str]:
     res = subprocess.run(
-        ["dvc", "add", str(component_path)],
+        ["dvc", "add", str(path)],
         cwd=str(REPO_ROOT),
         text=True,
         capture_output=True,
@@ -248,35 +290,38 @@ def _run_dvc_add(component_path: Path) -> Tuple[int, str]:
     return res.returncode, out.strip()
 
 
-def _dvc_add_components(dataset_dir: Path, components: List[str]) -> Tuple[bool, List[str]]:
-    changed_any = False
-    messages: List[str] = []
+def _dvc_file_for_output_dir(output_dir: Path) -> Path:
+    # DVC creates "<output_dir>.dvc" next to the output directory
+    # e.g. data/dataset1/dvc  ->  data/dataset1/dvc.dvc
+    return output_dir.with_suffix(".dvc")
 
-    for cname in components:
-        comp_path = dataset_dir / cname
-        dvc_file = dataset_dir / f"{cname}.dvc"
 
-        before = _read_bytes_if_exists(dvc_file)
-        existed_before = dvc_file.exists()
+def _dvc_add_dataset(dataset_dir: Path) -> Tuple[bool, Path]:
+    """
+    DVC-add the dataset's DVC subfolder: data/<dataset>/dvc
+    Produces: data/<dataset>/dvc.dvc
+    """
+    dvc_output_dir = dataset_dir / DVC_SUBDIR_NAME
+    dvc_output_dir.mkdir(parents=True, exist_ok=True)
 
-        rc, out = _run_dvc_add(comp_path)
-        if rc != 0:
-            if out:
-                print(out)
-            raise SystemExit(rc)
+    dvc_file = _dvc_file_for_output_dir(dvc_output_dir)
 
-        after = _read_bytes_if_exists(dvc_file)
+    before = _read_bytes_if_exists(dvc_file)
+    existed_before = dvc_file.exists()
 
-        if not existed_before and dvc_file.exists():
-            changed_any = True
-            messages.append(f"[new] {cname}.dvc created")
-        elif before != after:
-            changed_any = True
-            messages.append(f"[updated] {cname}.dvc changed")
-        else:
-            messages.append(f"[nochange] {cname}.dvc unchanged")
+    rc, out = _run_dvc_add(dvc_output_dir)
+    if rc != 0:
+        if out:
+            print(out)
+        raise SystemExit(rc)
 
-    return changed_any, messages
+    after = _read_bytes_if_exists(dvc_file)
+
+    if not existed_before and dvc_file.exists():
+        return True, dvc_file
+    if before != after:
+        return True, dvc_file
+    return False, dvc_file
 
 
 def main() -> int:
@@ -317,26 +362,35 @@ def main() -> int:
     tag_version = int(raw_tag_version) if isinstance(raw_tag_version, int) else 0
     prev_tag_version = tag_version
 
-    changed_any, msgs = _dvc_add_components(dataset_dir, components)
-    for m in msgs:
-        print(m)
+    # Ensure structure exists before dvc add
+    _ensure_components_structure(meta, dataset_dir, components)
 
-    created_tag: str | None = None
+    # DVC add dataset-level output: data/<dataset>/dvc
+    changed_any, dvc_file = _dvc_add_dataset(dataset_dir)
+    dvc_rel = dvc_file.relative_to(REPO_ROOT)
+    if changed_any:
+        print(f"[updated] {dvc_rel} changed")
+    else:
+        print(f"[nochange] {dvc_rel} unchanged")
+
+    # Bump dataset version only when DVC output changed
     if changed_any:
         tag_version += 1
         meta["tag_version"] = tag_version
-        created_tag = _dataset_tag(args.name, tag_version)
         print(f"[tag] data changed -> bump tag_version to v{tag_version}")
     else:
         meta["tag_version"] = tag_version
         print(f"[tag] no data change -> keep tag_version at v{tag_version}")
 
-    _ensure_components(
+    prev_tag = _dataset_tag(args.name, prev_tag_version)
+    new_tag = _dataset_tag(args.name, tag_version)
+
+    # Append one row per version for each component, with dataset-wide changed flag
+    _update_component_history_on_version(
         meta,
-        dataset_dir,
         components,
-        prev_tag_version=prev_tag_version,
-        tag_version=tag_version,
+        prev_tag=prev_tag,
+        new_tag=new_tag,
         changed_any=changed_any,
     )
 
@@ -358,12 +412,12 @@ def main() -> int:
     print(
         f"  git add {meta_path.relative_to(REPO_ROOT)} {readme_path.relative_to(REPO_ROOT)} {DATA_INDEX_MD.relative_to(REPO_ROOT)}"
     )
-    print("  git add *.dvc")
+    print(f"  git add {dvc_rel}")
     print(f"  git add {dataset_dir.relative_to(REPO_ROOT)}/.gitignore")
     print(f'  git commit -m "Add/update dataset {args.name}"')
-    if created_tag is not None:
-        print(f"  git tag {created_tag}")
-        print(f"  # optionally push tag: git push origin {created_tag}")
+    if changed_any:
+        print(f"  git tag {new_tag}")
+        print(f"  # optionally push tag: git push origin {new_tag}")
 
     return 0
 

@@ -1,13 +1,16 @@
+# get_file_paths.py
 """
+get_file_paths.py
+
 Want a function that
-in its own subprocess(so that the cwd change does not affect the main process).
+in its own subprocess (so that the cwd change does not affect the main process).
 Input:
     - commit-or-tag
     - data-set-name (to find the data repo path)
 Actions:
     - cd env(DATA_REPO_ROOT)
     - git checkout commit-or-tag
-    - dvc pull
+    - dvc pull data/<dataset>/dvc
     - derive paths from data-set-name and env(DATA_ROOT)
 Output:
     - list of file paths (str) to the data files for the given data-set-name
@@ -27,6 +30,9 @@ class DataQuarryError(RuntimeError):
     """Raised when data-quarry operations fail."""
 
 
+DVC_SUBDIR_NAME = "dvc"
+
+
 def get_file_paths(
     *,
     ref: str,
@@ -41,23 +47,24 @@ def get_file_paths(
     *will* change to the requested ref.
 
     Example:
-      files = get_file_paths(dataset="my-dataset", ref="v1.0", components=["raw", "target"])
+      files = get_file_paths(dataset="dataset2", ref="dataset2-v3", components=["raw", "target"])
     """
-
-    repo_root_str = _require_env("DATA_REPO_ROOT")
-    data_root_str = _require_env("DATA_ROOT")
-
-    repo_root = Path(repo_root_str).resolve()
-    data_root = Path(data_root_str).resolve()
+    repo_root = Path(_require_env("DATA_REPO_ROOT")).resolve()
+    data_root = Path(_require_env("DATA_ROOT")).resolve()
 
     dataset_dir = data_root / dataset
     if not dataset_dir.is_dir():
         raise DataQuarryError(f"Dataset not found: {dataset_dir}")
 
+    # Move repo to the requested ref
     _run(repo_root, ["git", "checkout", ref])
-    _run(repo_root, ["dvc", "pull"])
 
-    return _collect_files(dataset_dir, components)
+    # Pull only the dataset's DVC output folder
+    dvc_dir = dataset_dir / DVC_SUBDIR_NAME
+    dvc_rel = dvc_dir.relative_to(repo_root).as_posix()
+    _run(repo_root, ["dvc", "pull", dvc_rel])
+
+    return _collect_files(dvc_dir, components)
 
 
 def _require_env(name: str) -> str:
@@ -79,17 +86,15 @@ def _run(cwd: Path, cmd: Iterable[str]) -> None:
         raise DataQuarryError(f"Command failed: {' '.join(cmd)}\n{msg}")
 
 
-def _collect_files(dataset_dir: Path, components: Sequence[str]) -> DatasetFiles:
+def _collect_files(dvc_dataset_dir: Path, components: Sequence[str]) -> DatasetFiles:
     """
-    Collect files for named dataset components.
+    Collect files for named dataset components inside the dataset DVC folder.
 
-    Example structure:
+    Structure:
       dataset/
-        raw/
-        target/
-        metadata/
-    Example call:
-      _collect_files(dataset_dir, ['raw', 'target'])
+        dvc/
+          raw/
+          target/
     """
     result: DatasetFiles = {}
 
@@ -97,7 +102,7 @@ def _collect_files(dataset_dir: Path, components: Sequence[str]) -> DatasetFiles
         raise DataQuarryError("components must be non-empty (e.g. ['raw', 'target']).")
 
     for component in components:
-        component_dir = dataset_dir / component
+        component_dir = dvc_dataset_dir / component
         if not component_dir.is_dir():
             raise DataQuarryError(f"Dataset component not found: {component_dir}")
 

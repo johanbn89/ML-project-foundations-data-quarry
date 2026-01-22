@@ -4,14 +4,12 @@ _Describe what this dataset is and what it’s for._
 ## Components
 ### `raw`
 
-| Folder | Description | Schema | Produced by | Tag |
-|---|---|---|---|---|
-| `raw` | _…_ | _…_ | _…_ | `dataset2-v0` |
-| `raw` | _…_ | _…_ | _…_ | `dataset2-v1` |
+| Folder | Description | Schema | Produced by | Tag | Changed |
+|---|---|---|---|---|---|
+| `raw` | _…_ | _…_ | _…_ | `dataset2-v1` | `no` |
 
 ### `target`
 
-| Folder | Description | Schema | Produced by | Tag |
-|---|---|---|---|---|
-| `target` | _…_ | _…_ | _…_ | `dataset2-v0` |
-| `target` | _…_ | _…_ | _…_ | `dataset2-v1` |
+| Folder | Description | Schema | Produced by | Tag | Changed |
+|---|---|---|---|---|---|
+| `target` | _…_ | _…_ | _…_ | `dataset2-v1` | `no` |
