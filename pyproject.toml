@@ -5,16 +5,22 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "black>=25.12.0",
     "dvc>=3.66.1",
-    "mypy>=1.19.1",
     "numpy>=2.4.1",
     "platformdirs>=4.5.1",
-    "pre-commit>=4.5.1",
-    "ruff>=0.14.13",
     "tomli-w>=1.2.0",
     "typer>=0.21.1",
 ]
+
+[dependency-groups]
+dev = [
+    "black>=25.12.0",
+    "mypy>=1.19.1",
+    "pre-commit>=4.5.1",
+    "ruff>=0.14.13",
+    "ipython>=9.9.0",
+]
+
 
 [project.scripts]
 data-repo-setup = "data_repo_setup.cli:app"
