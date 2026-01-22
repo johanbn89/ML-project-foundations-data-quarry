@@ -1,0 +1,48 @@
+name: dataset1
+tag: mytag
+version: 0.1.0
+status: draft            # draft|active|deprecated
+owner: "team-x"          # or person
+license: "internal"
+created: "2026-01-22"
+updated: "2026-01-22"
+
+description: >
+  One-liner description of what this dataset is.
+
+lineage:
+  sources:
+    - name: "system-a export"
+      uri: "s3://bucket/key-or-link"
+      accessed: "2026-01-10"
+  transforms:
+    - name: "clean_and_join.py"
+      uri: "src/pipelines/clean_and_join.py"
+      notes: "drops duplicates; normalizes columns"
+
+components:
+  raw:
+    path: "raw"
+    description: "Raw dumps from system-a."
+    schema: "docs/schema_raw.md"
+    produced_by: null
+  target:
+    path: "target"
+    description: "Training targets."
+    schema: "docs/schema_target.md"
+    produced_by: "src/pipelines/make_target.py"
+  features:
+    path: "features"
+    description: "Feature store snapshot."
+    schema: null
+    produced_by: "src/pipelines/make_features.py"
+
+splits:
+  strategy: "time-based"
+  train: "2025-01-01..2025-10-31"
+  val: "2025-11-01..2025-11-30"
+  test: "2025-12-01..2025-12-31"
+
+notes:
+  - "PII removed via src/pipelines/redact_pii.py"
+  - "Known issue: missing values in field X before 2025-03"
