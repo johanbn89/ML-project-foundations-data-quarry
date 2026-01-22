@@ -1,0 +1,20 @@
+created: '2026-01-22'
+updated: '2026-01-22'
+name: dataset2
+tag: mytag
+version: 300.1.0
+status: draft
+description: ''
+components:
+  raw:
+    path: raw
+    description: ''
+    schema: null
+    produced_by: null
+    tag: dataset2-raw-300.1.0
+  target:
+    path: target
+    description: ''
+    schema: null
+    produced_by: null
+    tag: dataset2-target-300.1.0
