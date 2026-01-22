@@ -1,0 +1,27 @@
+name: dataset1
+tag: mytag
+version: 0.1.0
+status: draft
+owner: ""
+license: internal
+created: 2026-01-22
+updated: 2026-01-22
+description: ""
+lineage:
+  sources:
+{}
+components:
+  raw:
+    path: raw
+    description: ""
+    schema: null
+    produced_by: null
+  target:
+    path: target
+    description: ""
+    schema: null
+    produced_by: null
+splits:
+{}
+notes:
+[]
