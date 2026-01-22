@@ -9,11 +9,15 @@ components:
     description: ''
     schema: null
     produced_by: null
-    tags: []
+    tags:
+    - dataset2-v2
+    tag: dataset2-v2
   target:
     path: target
     description: ''
     schema: null
     produced_by: null
-    tags: []
-tag_version: 1
+    tags:
+    - dataset2-v2
+    tag: dataset2-v2
+tag_version: 2

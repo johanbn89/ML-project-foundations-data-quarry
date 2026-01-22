@@ -39,7 +39,7 @@ def generate_data() -> Tuple[NDArray[np.float64], NDArray[np.int64]]:
 
 
 def save_raw(X: NDArray[np.float64]) -> None:
-    raw_path: str = os.path.join(RAW_DIR, "data33.csv")
+    raw_path: str = os.path.join(RAW_DIR, "data.csv")
     with open(raw_path, "w", newline="") as f:
         writer = csv.writer(f)
         header = [f"feature_{i}" for i in range(X.shape[1])]
@@ -49,7 +49,7 @@ def save_raw(X: NDArray[np.float64]) -> None:
 
 
 def save_target(y: NDArray[np.int64]) -> None:
-    target_path: str = os.path.join(TARGET_DIR, "labels33.csv")
+    target_path: str = os.path.join(TARGET_DIR, "labels.csv")
     with open(target_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["label"])

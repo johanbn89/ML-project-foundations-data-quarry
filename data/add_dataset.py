@@ -121,19 +121,30 @@ def _discover_components(dataset_dir: Path) -> List[str]:
 
 
 def _all_components(meta: Dict[str, Any], discovered: List[str]) -> List[str]:
-    """
-    Use union of:
-      - discovered components under data/<dataset>/dvc/
-      - components already present in dataset.yaml
-    This prevents “headers only” when discovery fails or dvc folder is empty.
-    """
     meta_components = _as_dict(meta.get("components"))
     meta_names = [k for k in meta_components.keys() if isinstance(k, str) and k]
-    merged = sorted(set(discovered) | set(meta_names))
-    return merged
+    return sorted(set(discovered) | set(meta_names))
+
+
+def _normalize_tags(entry: Dict[str, Any]) -> List[str]:
+    """
+    Accept legacy shapes:
+      - list[str]
+      - single string
+      - None / missing
+    Always returns list[str].
+    """
+    raw = entry.get("tags")
+    if isinstance(raw, list):
+        return [str(t) for t in raw if str(t)]
+    if isinstance(raw, str):
+        s = raw.strip()
+        return [s] if s else []
+    return []
 
 
 def _ensure_component_entries(meta: Dict[str, Any], components: List[str]) -> None:
+    # IMPORTANT: assign back so we don't mutate a detached copy
     meta_components = _as_dict(meta.get("components"))
     meta["components"] = meta_components
 
@@ -146,22 +157,24 @@ def _ensure_component_entries(meta: Dict[str, Any], components: List[str]) -> No
         entry.setdefault("schema", None)
         entry.setdefault("produced_by", None)
 
-        tags_any = entry.get("tags", [])
-        tags = [str(t) for t in _as_list(tags_any) if str(t)]
-        entry["tags"] = tags
+        entry["tags"] = _normalize_tags(entry)
 
 
 def _append_tag_for_all_components(meta: Dict[str, Any], components: List[str], tag: str) -> None:
+    # IMPORTANT: assign back so we don't mutate a detached copy
     meta_components = _as_dict(meta.get("components"))
+    meta["components"] = meta_components
+
     for cname in components:
         entry = _as_dict(meta_components.get(cname))
         meta_components[cname] = entry
 
-        tags = [str(t) for t in _as_list(entry.get("tags")) if str(t)]
+        tags = _normalize_tags(entry)
         if not tags or tags[-1] != tag:
             tags.append(tag)
+
         entry["tags"] = tags
-        entry["tag"] = tags[-1] if tags else tag
+        entry["tag"] = tags[-1]
 
 
 def _render_readme(meta: Dict[str, Any]) -> str:
@@ -177,7 +190,7 @@ def _render_readme(meta: Dict[str, Any]) -> str:
     safe_components: Dict[str, Dict[str, Any]] = {}
     for cname in components_order:
         raw = _as_dict(components.get(cname))
-        tags = [str(t) for t in _as_list(raw.get("tags")) if str(t)]
+        tags = _normalize_tags(raw)
         safe_components[cname] = {
             "path": str(raw.get("path", cname)),
             "description": str(raw.get("description", "")),
@@ -299,7 +312,6 @@ def main() -> int:
     raw_tag_version = meta.get("tag_version", 0)
     tag_version = int(raw_tag_version) if isinstance(raw_tag_version, int) else 0
 
-    # components = union(discovered on disk, already in YAML)
     discovered = _discover_components(dataset_dir)
     components = _all_components(meta, discovered)
 
@@ -319,7 +331,6 @@ def main() -> int:
 
     current_tag = _dataset_tag(args.name, tag_version)
 
-    # Always ensure tables have at least the current tag (idempotent)
     _append_tag_for_all_components(meta, components, current_tag)
 
     _write_yaml(meta_path, meta)
