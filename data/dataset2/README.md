@@ -1,6 +1,10 @@
 # Dataset: `dataset2`
 
 _Describe what this dataset is and what it’s for._
+
+Notice, if a component/folder is created later it can not be used by earlier tags, i.e.
+get_file_paths(tag, dataset, component=[raw, add_later]) will break.
+
 ## Components
 ### `processed`
 
