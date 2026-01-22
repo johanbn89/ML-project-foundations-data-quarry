@@ -1151,37 +1151,39 @@ name = "ml-project-foundations-data-quarry"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "black" },
     { name = "dvc" },
-    { name = "mypy" },
     { name = "numpy" },
     { name = "platformdirs" },
-    { name = "pre-commit" },
-    { name = "ruff" },
     { name = "tomli-w" },
     { name = "typer" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "black" },
     { name = "ipython" },
+    { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "ruff" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "black", specifier = ">=25.12.0" },
     { name = "dvc", specifier = ">=3.66.1" },
-    { name = "mypy", specifier = ">=1.19.1" },
     { name = "numpy", specifier = ">=2.4.1" },
     { name = "platformdirs", specifier = ">=4.5.1" },
-    { name = "pre-commit", specifier = ">=4.5.1" },
-    { name = "ruff", specifier = ">=0.14.13" },
     { name = "tomli-w", specifier = ">=1.2.0" },
     { name = "typer", specifier = ">=0.21.1" },
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ipython", specifier = ">=9.9.0" }]
+dev = [
+    { name = "black", specifier = ">=25.12.0" },
+    { name = "ipython", specifier = ">=9.9.0" },
+    { name = "mypy", specifier = ">=1.19.1" },
+    { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "ruff", specifier = ">=0.14.13" },
+]
 
 [[package]]
 name = "multidict"
