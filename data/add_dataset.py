@@ -68,7 +68,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set
 # Repo layout
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
-DATASETS_INDEX = DATA_DIR / "datasets.md"
+DATASETS_INDEX = DATA_DIR / "README.md"
 
 # Markers for idempotent README/index updates
 README_MARK_META_START = "<!-- dataset-metadata:start -->"
