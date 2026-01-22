@@ -6,12 +6,14 @@ _Describe what this dataset is and what it’s for._
 
 | Folder | Description | Schema | Produced by | Tag |
 |---|---|---|---|---|
-| `raw` | _…_ | _…_ | _…_ | `dataset1-raw-v2` |
-| `raw` | _…_ | _…_ | _…_ | `dataset1-raw-v3` |
+| `raw` | _…_ | _…_ | _…_ | `dataset1-raw-v0` |
+| `raw` | _…_ | _…_ | _…_ | `dataset1-raw-v1` |
+| `raw` | _…_ | _…_ | _…_ | `dataset1-v2` |
 
 ### `target`
 
 | Folder | Description | Schema | Produced by | Tag |
 |---|---|---|---|---|
-| `target` | _…_ | _…_ | _…_ | `dataset1-target-v2` |
-| `target` | _…_ | _…_ | _…_ | `dataset1-target-v3` |
+| `target` | _…_ | _…_ | _…_ | `dataset1-target-v0` |
+| `target` | _…_ | _…_ | _…_ | `dataset1-target-v1` |
+| `target` | _…_ | _…_ | _…_ | `dataset1-v2` |

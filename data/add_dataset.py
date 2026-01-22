@@ -1,32 +1,3 @@
-"""
-We should create or fill out dataset readme and table of datasets, link to dataset readme.
-
-dataset readme should contain
-- tag
-- Information about data, eg.,
-  where it comes from and it have been derived from -TRANSFORMS-> to
-  A section of this for each component eg. raw, target, features, splits, etc.
-
-Pipeline of actions,
- - Developer have added some folder with data or changed files in
-   data/<dataset_name>/componentXX, data/<dataset_name>/componentYY, etc.
- - We want to track this, so we run `add_dataset.py` script
-    - This script will create or update data/<dataset_name>/README.md
-    - This script will create or update data/README.md (table of datasets)
-    - dvc add data/<dataset_name>/** (maybe optional, or we do it always?)
-    - git add data/<dataset_name>/README.md data/README.md data/<dataset_name>/**.dvc
-    - git commit -m "Add/update dataset <dataset_name>"
-    - git push origin main
-
-Dataset helper (local dev tool).
-
-Dev deps:
-  uv add --dev pyyaml jinja2 types-PyYAML
-
-Examples:
-  uv run python data/add_dataset.py --name dataset1 --components raw target
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -41,7 +12,6 @@ from jinja2 import Environment, StrictUndefined
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 DATA_INDEX_MD = DATA_DIR / "README.md"
-
 
 README_TEMPLATE = r"""# Dataset: `{{ name }}`
 
@@ -78,7 +48,6 @@ _No components registered. Re-run with `--components raw target ...`._
 {%- endif %}
 """
 
-
 DATA_INDEX_TEMPLATE = """# Datasets
 
 This file is maintained by `data/add_dataset.py`.
@@ -96,9 +65,6 @@ def _env() -> Environment:
 
 
 def _as_dict(value: Any) -> Dict[str, Any]:
-    """
-    Normalize a YAML-loaded value to a dict[str, Any].
-    """
     if isinstance(value, dict):
         out: Dict[str, Any] = {}
         for k, v in value.items():
@@ -131,17 +97,15 @@ def _normalize_components(components: Sequence[str]) -> List[str]:
     seen: set[str] = set()
     for c in components:
         c2 = str(c).strip().strip("/\\")
-        if not c2:
-            continue
-        if c2 in seen:
+        if not c2 or c2 in seen:
             continue
         seen.add(c2)
         out.append(c2)
     return out
 
 
-def _component_tag(dataset_name: str, component_name: str, tag_version: int) -> str:
-    return f"{dataset_name}-{component_name}-v{tag_version}"
+def _dataset_tag(dataset_name: str, tag_version: int) -> str:
+    return f"{dataset_name}-v{tag_version}"
 
 
 def _ensure_components(
@@ -156,7 +120,6 @@ def _ensure_components(
     meta_components = _as_dict(meta.get("components"))
     meta["components"] = meta_components
 
-    # Make YAML components exactly match explicit list
     keep = set(components)
     for existing in list(meta_components.keys()):
         if existing not in keep:
@@ -164,11 +127,13 @@ def _ensure_components(
 
     dataset_name = str(meta.get("name", "") or "")
 
+    new_tag = _dataset_tag(dataset_name, tag_version)
+    prev_tag = _dataset_tag(dataset_name, prev_tag_version)
+
     for cname in components:
         (dataset_dir / cname).mkdir(parents=True, exist_ok=True)
 
-        raw_entry = meta_components.get(cname)
-        entry = _as_dict(raw_entry)
+        entry = _as_dict(meta_components.get(cname))
         meta_components[cname] = entry
 
         entry.setdefault("path", cname)
@@ -176,17 +141,14 @@ def _ensure_components(
         entry.setdefault("schema", None)
         entry.setdefault("produced_by", None)
 
-        new_tag = _component_tag(dataset_name, cname, tag_version)
-        prev_tag = _component_tag(dataset_name, cname, prev_tag_version)
-
         tags_val = entry.get("tags", [])
         tags: List[str] = tags_val if isinstance(tags_val, list) else []
         tags = [str(t) for t in tags if str(t)]
 
-        # Seed history on first bump so README grows immediately:
-        # if we are bumping and there's no history yet, add previous version tag first.
+        # Grow history when we bump:
         if changed_any:
-            if not tags and prev_tag_version >= 0 and prev_tag != new_tag:
+            # Seed previous tag on first bump so the table grows immediately
+            if not tags and prev_tag != new_tag:
                 tags.append(prev_tag)
             if not tags or tags[-1] != new_tag:
                 tags.append(new_tag)
@@ -272,15 +234,10 @@ def _find_all_dataset_meta() -> List[Dict[str, Any]]:
 
 
 def _read_bytes_if_exists(path: Path) -> bytes:
-    if not path.exists():
-        return b""
-    return path.read_bytes()
+    return path.read_bytes() if path.exists() else b""
 
 
 def _run_dvc_add(component_path: Path) -> Tuple[int, str]:
-    """
-    Run `dvc add <component_path>` and return (exit_code, combined_output).
-    """
     res = subprocess.run(
         ["dvc", "add", str(component_path)],
         cwd=str(REPO_ROOT),
@@ -292,12 +249,6 @@ def _run_dvc_add(component_path: Path) -> Tuple[int, str]:
 
 
 def _dvc_add_components(dataset_dir: Path, components: List[str]) -> Tuple[bool, List[str]]:
-    """
-    Always DVC-add each component folder.
-    Returns:
-      changed_any: True if any *.dvc file changed or was created
-      messages: human-friendly status lines
-    """
     changed_any = False
     messages: List[str] = []
 
@@ -366,21 +317,20 @@ def main() -> int:
     tag_version = int(raw_tag_version) if isinstance(raw_tag_version, int) else 0
     prev_tag_version = tag_version
 
-    # 1) Always DVC add, and detect if anything changed
     changed_any, msgs = _dvc_add_components(dataset_dir, components)
     for m in msgs:
         print(m)
 
-    # 2) Bump tag_version only on change
+    created_tag: str | None = None
     if changed_any:
         tag_version += 1
         meta["tag_version"] = tag_version
+        created_tag = _dataset_tag(args.name, tag_version)
         print(f"[tag] data changed -> bump tag_version to v{tag_version}")
     else:
         meta["tag_version"] = tag_version
         print(f"[tag] no data change -> keep tag_version at v{tag_version}")
 
-    # 3) Ensure YAML component entries + derived tags (and tag history)
     _ensure_components(
         meta,
         dataset_dir,
@@ -390,7 +340,6 @@ def main() -> int:
         changed_any=changed_any,
     )
 
-    # 4) Write dataset.yaml, README.md, and data/README.md index
     _write_yaml(meta_path, meta)
     print(f"Updated {meta_path.relative_to(REPO_ROOT)}")
 
@@ -412,6 +361,9 @@ def main() -> int:
     print("  git add *.dvc")
     print(f"  git add {dataset_dir.relative_to(REPO_ROOT)}/.gitignore")
     print(f'  git commit -m "Add/update dataset {args.name}"')
+    if created_tag is not None:
+        print(f"  git tag {created_tag}")
+        print(f"  # optionally push tag: git push origin {created_tag}")
 
     return 0
 
