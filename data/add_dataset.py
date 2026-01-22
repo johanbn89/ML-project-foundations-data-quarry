@@ -14,12 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 DATA_INDEX_MD = DATA_DIR / "README.md"
 
-# Data layout:
-# data/<dataset>/
-#   dataset.yaml      (git)
-#   README.md         (git)
-#   utils/            (git, optional)
-#   dvc/<component>/  (data, tracked by DVC)
+# data/<dataset>/dvc/<component>/...
 DVC_SUBDIR_NAME = "dvc"
 
 
@@ -41,9 +36,13 @@ _Describe what this dataset is and what it’s for._
 
 | Folder | Description | Schema | Produced by | Tag |
 |---|---|---|---|---|
+{% if c.tags %}
 {% for t in c.tags %}
 | `{{ c.path }}` | {{ c.description or "_…_" }} | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} | `{{ t }}` |
 {% endfor %}
+{% else %}
+| `{{ c.path }}` | {{ c.description or "_…_" }} | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} | _No versions yet — run the script after adding data._ |
+{% endif %}
 
 {%- endfor %}
 
@@ -111,9 +110,6 @@ def _dataset_tag(dataset_name: str, tag_version: int) -> str:
 
 
 def _discover_components(dataset_dir: Path) -> List[str]:
-    """
-    Components are immediate subfolders under data/<dataset>/dvc.
-    """
     dvc_root = dataset_dir / DVC_SUBDIR_NAME
     if not dvc_root.is_dir():
         return []
@@ -124,11 +120,20 @@ def _discover_components(dataset_dir: Path) -> List[str]:
     return comps
 
 
+def _all_components(meta: Dict[str, Any], discovered: List[str]) -> List[str]:
+    """
+    Use union of:
+      - discovered components under data/<dataset>/dvc/
+      - components already present in dataset.yaml
+    This prevents “headers only” when discovery fails or dvc folder is empty.
+    """
+    meta_components = _as_dict(meta.get("components"))
+    meta_names = [k for k in meta_components.keys() if isinstance(k, str) and k]
+    merged = sorted(set(discovered) | set(meta_names))
+    return merged
+
+
 def _ensure_component_entries(meta: Dict[str, Any], components: List[str]) -> None:
-    """
-    Ensure meta['components'][name] exists for discovered components.
-    Do NOT delete existing components automatically.
-    """
     meta_components = _as_dict(meta.get("components"))
     meta["components"] = meta_components
 
@@ -246,11 +251,6 @@ def _dvc_file_for_output_dir(output_dir: Path) -> Path:
 
 
 def _dvc_add_dataset(dataset_dir: Path) -> Tuple[bool, Path]:
-    """
-    DVC-add the dataset's DVC subfolder: data/<dataset>/dvc
-    Produces: data/<dataset>/dvc.dvc
-    Returns (changed_any, dvc_file_path).
-    """
     dvc_output_dir = dataset_dir / DVC_SUBDIR_NAME
     dvc_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -299,13 +299,12 @@ def main() -> int:
     raw_tag_version = meta.get("tag_version", 0)
     tag_version = int(raw_tag_version) if isinstance(raw_tag_version, int) else 0
 
-    # Discover components from filesystem
-    components = _discover_components(dataset_dir)
+    # components = union(discovered on disk, already in YAML)
+    discovered = _discover_components(dataset_dir)
+    components = _all_components(meta, discovered)
 
-    # Ensure YAML entries for discovered components
     _ensure_component_entries(meta, components)
 
-    # Track data with DVC (dataset-level dvc folder)
     changed_any, dvc_file = _dvc_add_dataset(dataset_dir)
     dvc_rel = dvc_file.relative_to(REPO_ROOT)
 
@@ -320,7 +319,7 @@ def main() -> int:
 
     current_tag = _dataset_tag(args.name, tag_version)
 
-    # Ensure each component table includes the current tag (idempotent)
+    # Always ensure tables have at least the current tag (idempotent)
     _append_tag_for_all_components(meta, components, current_tag)
 
     _write_yaml(meta_path, meta)
