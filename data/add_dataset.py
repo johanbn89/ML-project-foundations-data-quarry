@@ -78,15 +78,15 @@ _No components registered. Re-run with `--components raw target ...`._
 """
 
 
-DATASETS_TEMPLATE = r"""# Datasets
+DATASETS_TEMPLATE = """# Datasets
 
 This file is maintained by `data/add_dataset.py`.
 
 | Dataset | Tag | Version | Status | Components | README |
 |---|---|---|---|---:|---|
-{%- for d in datasets %}
+{% for d in datasets %}
 | [`{{ d.name }}`]({{ d.rel_dir }}/) | `{{ d.tag }}` | `{{ d.version }}` | `{{ d.status }}` | {{ d.n_components }} | [README]({{ d.rel_readme }}) |
-{%- endfor %}
+{% endfor %}
 """
 
 
