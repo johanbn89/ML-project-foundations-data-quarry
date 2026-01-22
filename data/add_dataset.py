@@ -47,7 +47,7 @@ _Describe what this dataset is and what it’s for._
 
 {%- else %}
 
-_No components registered. Re-run with `--components raw target ...`._
+_No components discovered yet. Add folders under `data/{{ name }}/{{ dvc_subdir }}/` and rerun._
 
 {%- endif %}
 """
@@ -110,41 +110,33 @@ def _write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def _normalize_components(components: Sequence[str]) -> List[str]:
-    out: List[str] = []
-    seen: set[str] = set()
-    for c in components:
-        c2 = str(c).strip().strip("/\\")
-        if not c2 or c2 in seen:
-            continue
-        seen.add(c2)
-        out.append(c2)
-    return out
-
-
 def _dataset_tag(dataset_name: str, tag_version: int) -> str:
     return f"{dataset_name}-v{tag_version}"
 
 
-def _ensure_components_structure(meta: Dict[str, Any], dataset_dir: Path, components: List[str]) -> None:
+def _discover_components(dataset_dir: Path) -> List[str]:
     """
-    Ensure YAML has component entries and that DVC directory structure exists.
-    Does NOT append version history.
+    Discover components as immediate subdirectories under data/<dataset>/dvc.
+    """
+    dvc_root = dataset_dir / DVC_SUBDIR_NAME
+    if not dvc_root.is_dir():
+        return []
+    comps: List[str] = []
+    for p in sorted(dvc_root.iterdir()):
+        if p.is_dir() and not p.name.startswith("."):
+            comps.append(p.name)
+    return comps
+
+
+def _ensure_component_entries(meta: Dict[str, Any], components: Sequence[str]) -> None:
+    """
+    Ensure meta['components'] contains at least the discovered components.
+    We DO NOT delete existing entries automatically (so history isn't lost if a folder is temporarily missing).
     """
     meta_components = _as_dict(meta.get("components"))
     meta["components"] = meta_components
 
-    keep = set(components)
-    for existing in list(meta_components.keys()):
-        if existing not in keep:
-            del meta_components[existing]
-
-    dvc_root = dataset_dir / DVC_SUBDIR_NAME
-    dvc_root.mkdir(parents=True, exist_ok=True)
-
     for cname in components:
-        (dvc_root / cname).mkdir(parents=True, exist_ok=True)
-
         entry = _as_dict(meta_components.get(cname))
         meta_components[cname] = entry
 
@@ -153,7 +145,6 @@ def _ensure_components_structure(meta: Dict[str, Any], dataset_dir: Path, compon
         entry.setdefault("schema", None)
         entry.setdefault("produced_by", None)
 
-        # Versioning fields (dataset-wide)
         entry.setdefault("tag", "")
         entry.setdefault("changed", False)
         entry.setdefault("history", [])
@@ -161,16 +152,12 @@ def _ensure_components_structure(meta: Dict[str, Any], dataset_dir: Path, compon
 
 def _update_component_history_on_version(
     meta: Dict[str, Any],
-    components: List[str],
+    components: Sequence[str],
     *,
     prev_tag: str,
     new_tag: str,
     changed_any: bool,
 ) -> None:
-    """
-    Append a history row for every component for the new dataset version.
-    The 'changed' flag is dataset-wide (same for all components).
-    """
     meta_components = _as_dict(meta.get("components"))
 
     for cname in components:
@@ -180,7 +167,6 @@ def _update_component_history_on_version(
         history = _as_list_of_dicts(entry.get("history"))
         entry["history"] = history
 
-        # Seed previous version if history is empty so tables grow immediately
         if not history and prev_tag != new_tag:
             history.append({"tag": prev_tag, "changed": "n/a"})
 
@@ -207,12 +193,7 @@ def _render_readme(meta: Dict[str, Any]) -> str:
 
         history: List[Dict[str, str]] = []
         for row in history_raw:
-            history.append(
-                {
-                    "tag": str(row.get("tag", "")),
-                    "changed": str(row.get("changed", "")),
-                }
-            )
+            history.append({"tag": str(row.get("tag", "")), "changed": str(row.get("changed", ""))})
 
         safe_components[cname] = {
             "path": str(raw.get("path", cname)),
@@ -230,6 +211,7 @@ def _render_readme(meta: Dict[str, Any]) -> str:
             description=description,
             components=safe_components,
             components_order=components_order,
+            dvc_subdir=DVC_SUBDIR_NAME,
         ).rstrip()
         + "\n"
     )
@@ -246,14 +228,7 @@ def _render_data_index(all_meta: List[Dict[str, Any]]) -> str:
         rel_dir = ds_dir.relative_to(DATA_DIR).as_posix()
         comps = _as_dict(m.get("components"))
 
-        rows.append(
-            {
-                "name": name,
-                "status": str(m.get("status", "")),
-                "n_components": len(comps),
-                "rel_dir": rel_dir,
-            }
-        )
+        rows.append({"name": name, "status": str(m.get("status", "")), "n_components": len(comps), "rel_dir": rel_dir})
 
     return tmpl.render(datasets=rows).rstrip() + "\n"
 
@@ -291,16 +266,11 @@ def _run_dvc_add(path: Path) -> Tuple[int, str]:
 
 
 def _dvc_file_for_output_dir(output_dir: Path) -> Path:
-    # DVC creates "<output_dir>.dvc" next to the output directory
-    # e.g. data/dataset1/dvc  ->  data/dataset1/dvc.dvc
+    # data/<dataset>/dvc  ->  data/<dataset>/dvc.dvc
     return output_dir.with_suffix(".dvc")
 
 
 def _dvc_add_dataset(dataset_dir: Path) -> Tuple[bool, Path]:
-    """
-    DVC-add the dataset's DVC subfolder: data/<dataset>/dvc
-    Produces: data/<dataset>/dvc.dvc
-    """
     dvc_output_dir = dataset_dir / DVC_SUBDIR_NAME
     dvc_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -326,20 +296,12 @@ def _dvc_add_dataset(dataset_dir: Path) -> Tuple[bool, Path]:
 
 def main() -> int:
     p = argparse.ArgumentParser(
-        description="Create/update dataset.yaml + README + data/README.md (explicit components)."
+        description="Create/update dataset.yaml + README + data/README.md (auto-discover components)."
     )
     p.add_argument("--name", required=True, help="Dataset folder name under data/ (e.g. dataset1)")
     p.add_argument("--status", default="draft", choices=["draft", "active", "deprecated"])
     p.add_argument("--description", default="", help="Dataset description shown in README (optional).")
-    p.add_argument(
-        "--components",
-        nargs="+",
-        required=True,
-        help="Explicit component subfolders, e.g. --components raw target features",
-    )
     args = p.parse_args()
-
-    components = _normalize_components(args.components)
 
     dataset_dir = DATA_DIR / args.name
     dataset_dir.mkdir(parents=True, exist_ok=True)
@@ -362,8 +324,11 @@ def main() -> int:
     tag_version = int(raw_tag_version) if isinstance(raw_tag_version, int) else 0
     prev_tag_version = tag_version
 
-    # Ensure structure exists before dvc add
-    _ensure_components_structure(meta, dataset_dir, components)
+    # Discover components from the filesystem
+    discovered_components = _discover_components(dataset_dir)
+
+    # Ensure YAML has entries for discovered components (do not delete existing)
+    _ensure_component_entries(meta, discovered_components)
 
     # DVC add dataset-level output: data/<dataset>/dvc
     changed_any, dvc_file = _dvc_add_dataset(dataset_dir)
@@ -385,10 +350,10 @@ def main() -> int:
     prev_tag = _dataset_tag(args.name, prev_tag_version)
     new_tag = _dataset_tag(args.name, tag_version)
 
-    # Append one row per version for each component, with dataset-wide changed flag
+    # Update history for components that exist (discovered)
     _update_component_history_on_version(
         meta,
-        components,
+        discovered_components,
         prev_tag=prev_tag,
         new_tag=new_tag,
         changed_any=changed_any,
