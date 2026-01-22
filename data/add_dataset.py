@@ -12,9 +12,9 @@ Pipeline of actions,
    data/<dataset_name>/componentXX, data/<dataset_name>/componentYY, etc.
  - We want to track this, so we run `add_dataset.py` script
     - This script will create or update data/<dataset_name>/README.md
-    - This script will create or update data/datasets.md (table of datasets)
+    - This script will create or update data/README.md (table of datasets)
     - dvc add data/<dataset_name>/** (maybe optional, or we do it always?)
-    - git add data/<dataset_name>/README.md data/datasets.md data/<dataset_name>/**.dvc
+    - git add data/<dataset_name>/README.md data/README.md data/<dataset_name>/**.dvc
     - git commit -m "Add/update dataset <dataset_name>"
     - git push origin main
 
@@ -24,8 +24,11 @@ Dev deps:
   uv add --dev pyyaml jinja2 types-PyYAML
 
 Examples:
-  uv run python data/add_dataset.py --name dataset1 --tag mytag --version 111.1.0 --components raw target
-  uv run python data/add_dataset.py --name dataset1 --tag mytag --version 111.1.0 --components raw target --dvc
+  uv run python data/add_dataset.py --name dataset1 --version 111.1.0 --components raw target
+  uv run python data/add_dataset.py --name dataset1 --version 111.1.0 --components raw target --dvc
+
+Optional:
+  uv run python data/add_dataset.py --name dataset1 --version 111.1.0 --components raw target --auto-components
 """
 
 from __future__ import annotations
@@ -41,7 +44,7 @@ from jinja2 import Environment, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
-DATASETS_MD = DATA_DIR / "datasets.md"
+DATA_INDEX_MD = DATA_DIR / "README.md"
 
 
 README_TEMPLATE = r"""# Dataset: `{{ name }}`
@@ -74,7 +77,7 @@ _No components registered. Re-run with `--components raw target ...`._
 """
 
 
-DATASETS_TEMPLATE = """# Datasets
+DATA_INDEX_TEMPLATE = """# Datasets
 
 This file is maintained by `data/add_dataset.py`.
 
@@ -87,8 +90,6 @@ This file is maintained by `data/add_dataset.py`.
 
 
 def _env() -> Environment:
-    # NOTE: keep trimming on, but avoid template patterns that collapse table newlines
-    # (we keep explicit newlines in DATASETS_TEMPLATE / README_TEMPLATE rows).
     return Environment(undefined=StrictUndefined, autoescape=False, trim_blocks=True, lstrip_blocks=True)
 
 
@@ -143,6 +144,20 @@ def _normalize_components(components: Sequence[str]) -> List[str]:
     return out
 
 
+def _discover_components(dataset_dir: Path) -> List[str]:
+    """
+    Auto-discover component folders under data/<dataset>/.
+    This is optional behavior (enabled with --auto-components).
+    """
+    if not dataset_dir.exists():
+        return []
+    comps: List[str] = []
+    for p in sorted(dataset_dir.iterdir()):
+        if p.is_dir() and not p.name.startswith("."):
+            comps.append(p.name)
+    return comps
+
+
 def _derive_version_tag(version: str) -> str:
     # keep alnum, dot, dash; replace others with '-'
     cleaned: List[str] = []
@@ -166,7 +181,7 @@ def _ensure_components(meta: Dict[str, Any], dataset_dir: Path, components: List
     meta_components = _as_dict(meta.get("components"))
     meta["components"] = meta_components
 
-    # Make YAML components exactly match explicit list
+    # Make YAML components exactly match provided list
     keep = set(components)
     for existing in list(meta_components.keys()):
         if existing not in keep:
@@ -201,7 +216,6 @@ def _render_readme(meta: Dict[str, Any]) -> str:
     components = _as_dict(meta.get("components"))
     components_order = sorted(components.keys())
 
-    # Ensure each comp has expected keys (for StrictUndefined)
     safe_components: Dict[str, Dict[str, Any]] = {}
     for cname in components_order:
         raw = _as_dict(components.get(cname))
@@ -224,16 +238,16 @@ def _render_readme(meta: Dict[str, Any]) -> str:
     )
 
 
-def _render_datasets_md(all_meta: List[Dict[str, Any]]) -> str:
+def _render_data_index(all_meta: List[Dict[str, Any]]) -> str:
     env = _env()
-    tmpl = env.from_string(DATASETS_TEMPLATE)
+    tmpl = env.from_string(DATA_INDEX_TEMPLATE)
 
     rows: List[Dict[str, Any]] = []
     for m in sorted(all_meta, key=lambda x: str(x.get("name", "")).lower()):
         name = str(m.get("name", ""))
         ds_dir = DATA_DIR / name
 
-        # datasets.md lives in data/, so links should be relative to DATA_DIR
+        # data/README.md lives in data/, so links should be relative to DATA_DIR
         rel_dir = ds_dir.relative_to(DATA_DIR).as_posix()
 
         comps = _as_dict(m.get("components"))
@@ -286,10 +300,11 @@ def _run_dvc_add(path: Path, *, dry_run: bool) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Create/update dataset.yaml + README + datasets.md (explicit components).")
+    p = argparse.ArgumentParser(
+        description="Create/update dataset.yaml + README + data/README.md (explicit components)."
+    )
     p.add_argument("--name", required=True, help="Dataset folder name under data/ (e.g. dataset1)")
-    p.add_argument("--tag", required=True, help="Dataset tag (dataset-level, used in datasets.md)")
-    p.add_argument("--version", required=True, help="Dataset version (used in datasets.md)")
+    p.add_argument("--version", required=True, help="Dataset version (used to derive tags)")
     p.add_argument("--status", default="draft", choices=["draft", "active", "deprecated"])
     p.add_argument("--description", default="", help="Dataset description shown in README (optional).")
 
@@ -299,15 +314,33 @@ def main() -> int:
         required=True,
         help="Explicit component subfolders, e.g. --components raw target features",
     )
-    p.add_argument("--dvc", action="store_true", help="Run `dvc add` for the explicit components only.")
+    p.add_argument(
+        "--auto-components",
+        action="store_true",
+        help="Also include any existing subfolders under data/<dataset>/ as components (table grows automatically).",
+    )
+
+    p.add_argument("--dvc", action="store_true", help="Run `dvc add` for the components only.")
     p.add_argument("--dry-run", action="store_true")
 
     args = p.parse_args()
 
-    components = _normalize_components(args.components)
-
     dataset_dir = DATA_DIR / args.name
     dataset_dir.mkdir(parents=True, exist_ok=True)
+
+    explicit_components = _normalize_components(args.components)
+    if args.auto_components:
+        discovered = _discover_components(dataset_dir)
+        # union while keeping explicit order first
+        combined: List[str] = []
+        seen: set[str] = set()
+        for c in explicit_components + discovered:
+            if c not in seen:
+                seen.add(c)
+                combined.append(c)
+        components = combined
+    else:
+        components = explicit_components
 
     today = dt.date.today().isoformat()
     meta_path = dataset_dir / "dataset.yaml"
@@ -317,7 +350,6 @@ def main() -> int:
     meta["updated"] = today
 
     meta["name"] = args.name
-    meta["tag"] = args.tag
     meta["version"] = args.version
     meta["status"] = args.status
 
@@ -325,6 +357,9 @@ def main() -> int:
         meta["description"] = args.description
     else:
         meta.setdefault("description", "")
+
+    # We no longer accept --tag; keep dataset-level tag derived for backward compatibility if needed
+    meta["tag"] = f"{args.name}-{_derive_version_tag(args.version)}"
 
     _ensure_components(meta, dataset_dir, components)
 
@@ -340,9 +375,9 @@ def main() -> int:
     if not any(m.get("name") == args.name for m in all_meta):
         all_meta.append(meta)
 
-    datasets_txt = _render_datasets_md(all_meta)
-    _write_text(DATASETS_MD, datasets_txt, dry_run=args.dry_run)
-    print(f"Updated {DATASETS_MD.relative_to(REPO_ROOT)}")
+    index_txt = _render_data_index(all_meta)
+    _write_text(DATA_INDEX_MD, index_txt, dry_run=args.dry_run)
+    print(f"Updated {DATA_INDEX_MD.relative_to(REPO_ROOT)}")
 
     if args.dvc:
         for cname in components:
@@ -356,7 +391,7 @@ def main() -> int:
 
     print("\nNext:")
     print(
-        f"  git add {meta_path.relative_to(REPO_ROOT)} {readme_path.relative_to(REPO_ROOT)} {DATASETS_MD.relative_to(REPO_ROOT)}"
+        f"  git add {meta_path.relative_to(REPO_ROOT)} {readme_path.relative_to(REPO_ROOT)} {DATA_INDEX_MD.relative_to(REPO_ROOT)}"
     )
     if args.dvc:
         print("  git add *.dvc")
