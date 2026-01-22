@@ -149,6 +149,7 @@ def _ensure_components(
     dataset_dir: Path,
     components: List[str],
     *,
+    prev_tag_version: int,
     tag_version: int,
     changed_any: bool,
 ) -> None:
@@ -176,14 +177,17 @@ def _ensure_components(
         entry.setdefault("produced_by", None)
 
         new_tag = _component_tag(dataset_name, cname, tag_version)
+        prev_tag = _component_tag(dataset_name, cname, prev_tag_version)
 
-        # Keep a growing tag history per component
         tags_val = entry.get("tags", [])
         tags: List[str] = tags_val if isinstance(tags_val, list) else []
         tags = [str(t) for t in tags if str(t)]
 
-        # Only append when data actually changed (i.e., when we bumped)
+        # Seed history on first bump so README grows immediately:
+        # if we are bumping and there's no history yet, add previous version tag first.
         if changed_any:
+            if not tags and prev_tag_version >= 0 and prev_tag != new_tag:
+                tags.append(prev_tag)
             if not tags or tags[-1] != new_tag:
                 tags.append(new_tag)
 
@@ -358,9 +362,9 @@ def main() -> int:
     else:
         meta.setdefault("description", "")
 
-    # tag_version is an integer that bumps only when DVC-tracked data changes.
     raw_tag_version = meta.get("tag_version", 0)
     tag_version = int(raw_tag_version) if isinstance(raw_tag_version, int) else 0
+    prev_tag_version = tag_version
 
     # 1) Always DVC add, and detect if anything changed
     changed_any, msgs = _dvc_add_components(dataset_dir, components)
@@ -377,7 +381,14 @@ def main() -> int:
         print(f"[tag] no data change -> keep tag_version at v{tag_version}")
 
     # 3) Ensure YAML component entries + derived tags (and tag history)
-    _ensure_components(meta, dataset_dir, components, tag_version=tag_version, changed_any=changed_any)
+    _ensure_components(
+        meta,
+        dataset_dir,
+        components,
+        prev_tag_version=prev_tag_version,
+        tag_version=tag_version,
+        changed_any=changed_any,
+    )
 
     # 4) Write dataset.yaml, README.md, and data/README.md index
     _write_yaml(meta_path, meta)

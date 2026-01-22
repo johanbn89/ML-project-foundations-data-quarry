@@ -3,21 +3,23 @@ updated: '2026-01-22'
 name: dataset2
 status: draft
 description: ''
-tag_version: 2
+tag_version: 3
 components:
   raw:
     path: raw
     description: ''
     schema: null
     produced_by: null
-    tag: dataset2-raw-v2
+    tag: dataset2-raw-v3
     tags:
     - dataset2-raw-v2
+    - dataset2-raw-v3
   target:
     path: target
     description: ''
     schema: null
     produced_by: null
-    tag: dataset2-target-v2
+    tag: dataset2-target-v3
     tags:
     - dataset2-target-v2
+    - dataset2-target-v3
