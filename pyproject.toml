@@ -23,7 +23,7 @@ dev = [
 
 
 [project.scripts]
-data-repo-setup = "data_repo_setup.cli:app"
+data-repo-setup = "data_quarry.cli.cli:app" # app is a Typer instance in cli.py
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -61,3 +61,8 @@ known-first-party = ["ml_project_foundations"]
 [tool.black]
 line-length = 120
 target-version = ["py312"]
+
+[dependency-groups]
+dev = [
+    "ipython>=9.9.0",
+]
