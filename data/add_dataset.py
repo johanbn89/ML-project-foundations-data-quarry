@@ -64,7 +64,6 @@ _Describe what this dataset is and what it’s for._
 |---|---|---|---|---|
 | `{{ c.path }}` | {{ c.description or "_…_" }} | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} | `{{ c.tag }}` |
 
-
 {%- endfor %}
 
 {%- else %}
@@ -79,15 +78,17 @@ DATASETS_TEMPLATE = """# Datasets
 
 This file is maintained by `data/add_dataset.py`.
 
-| Dataset | Tag | Version | Status | Components |
-|---|---|---|---|---:|
+| Dataset | Status | Components |
+|---|---|---:|
 {% for d in datasets %}
-| [`{{ d.name }}`]({{ d.rel_dir }}/) | `{{ d.tag }}` | `{{ d.version }}` | `{{ d.status }}` | {{ d.n_components }} |
+| [`{{ d.name }}`]({{ d.rel_dir }}/) | `{{ d.status }}` | {{ d.n_components }} |
 {% endfor %}
 """
 
 
 def _env() -> Environment:
+    # NOTE: keep trimming on, but avoid template patterns that collapse table newlines
+    # (we keep explicit newlines in DATASETS_TEMPLATE / README_TEMPLATE rows).
     return Environment(undefined=StrictUndefined, autoescape=False, trim_blocks=True, lstrip_blocks=True)
 
 
@@ -142,6 +143,25 @@ def _normalize_components(components: Sequence[str]) -> List[str]:
     return out
 
 
+def _derive_version_tag(version: str) -> str:
+    # keep alnum, dot, dash; replace others with '-'
+    cleaned: List[str] = []
+    for ch in version.strip():
+        if ch.isalnum() or ch in ".-":
+            cleaned.append(ch)
+        else:
+            cleaned.append("-")
+    out = "".join(cleaned)
+    while "--" in out:
+        out = out.replace("--", "-")
+    return out.strip("-") or "unknown"
+
+
+def _component_tag(dataset_name: str, component_name: str, version: str) -> str:
+    v = _derive_version_tag(version)
+    return f"{dataset_name}-{component_name}-{v}"
+
+
 def _ensure_components(meta: Dict[str, Any], dataset_dir: Path, components: List[str]) -> None:
     meta_components = _as_dict(meta.get("components"))
     meta["components"] = meta_components
@@ -151,6 +171,9 @@ def _ensure_components(meta: Dict[str, Any], dataset_dir: Path, components: List
     for existing in list(meta_components.keys()):
         if existing not in keep:
             del meta_components[existing]
+
+    dataset_name = str(meta.get("name", "") or "")
+    dataset_version = str(meta.get("version", "") or "")
 
     for cname in components:
         (dataset_dir / cname).mkdir(parents=True, exist_ok=True)
@@ -163,7 +186,9 @@ def _ensure_components(meta: Dict[str, Any], dataset_dir: Path, components: List
         entry.setdefault("description", "")
         entry.setdefault("schema", None)
         entry.setdefault("produced_by", None)
-        entry.setdefault("tag", "")  # per-component tag
+
+        # Always derive per-component tag from dataset + component + derived version
+        entry["tag"] = _component_tag(dataset_name, cname, dataset_version)
 
 
 def _render_readme(meta: Dict[str, Any]) -> str:
@@ -210,19 +235,15 @@ def _render_datasets_md(all_meta: List[Dict[str, Any]]) -> str:
 
         # datasets.md lives in data/, so links should be relative to DATA_DIR
         rel_dir = ds_dir.relative_to(DATA_DIR).as_posix()
-        rel_readme = (ds_dir / "README.md").relative_to(DATA_DIR).as_posix()
 
         comps = _as_dict(m.get("components"))
 
         rows.append(
             {
                 "name": name,
-                "tag": str(m.get("tag", "")),
-                "version": str(m.get("version", "")),
                 "status": str(m.get("status", "")),
                 "n_components": len(comps),
                 "rel_dir": rel_dir,
-                "rel_readme": rel_readme,
             }
         )
 
