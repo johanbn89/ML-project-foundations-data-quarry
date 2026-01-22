@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-data-repo-setup = "data_repo_setup.cli:app"
+data-repo-setup = "data_quarry.cli.cli:app" # app is a Typer instance in cli.py
 
 [build-system]
 requires = ["setuptools>=68"]
