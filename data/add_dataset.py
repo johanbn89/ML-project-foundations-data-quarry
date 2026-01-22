@@ -60,13 +60,10 @@ _Describe what this dataset is and what it’s for._
 
 ### `{{ cname }}`
 
-| Field | Value |
-|---|---|
-| Path | `{{ c.path }}` |
-| Description | {{ c.description or "_…_" }} |
-| Schema | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} |
-| Produced by | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} |
-| Tag | `{{ c.tag }}` |
+| Folder | Description | Schema | Produced by | Tag |
+|---|---|---|---|---|
+| `{{ c.path }}` | {{ c.description or "_…_" }} | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} | `{{ c.tag }}` |
+
 
 {%- endfor %}
 
@@ -82,10 +79,10 @@ DATASETS_TEMPLATE = """# Datasets
 
 This file is maintained by `data/add_dataset.py`.
 
-| Dataset | Tag | Version | Status | Components | README |
-|---|---|---|---|---:|---|
+| Dataset | Tag | Version | Status | Components |
+|---|---|---|---|---:|
 {% for d in datasets %}
-| [`{{ d.name }}`]({{ d.rel_dir }}/) | `{{ d.tag }}` | `{{ d.version }}` | `{{ d.status }}` | {{ d.n_components }} | [README]({{ d.rel_readme }}) |
+| [`{{ d.name }}`]({{ d.rel_dir }}/) | `{{ d.tag }}` | `{{ d.version }}` | `{{ d.status }}` | {{ d.n_components }} |
 {% endfor %}
 """
 

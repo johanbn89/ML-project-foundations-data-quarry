@@ -4,19 +4,11 @@ _Describe what this dataset is and what it’s for._
 ## Components
 ### `raw`
 
-| Field | Value |
-|---|---|
-| Path | `raw` |
-| Description | _…_ |
-| Schema | _…_ |
-| Produced by | _…_ |
-| Tag | `` |
+| Folder | Description | Schema | Produced by | Tag |
+|---|---|---|---|---|
+| `raw` | _…_ | _…_ | _…_ | `` |
 ### `target`
 
-| Field | Value |
-|---|---|
-| Path | `target` |
-| Description | _…_ |
-| Schema | _…_ |
-| Produced by | _…_ |
-| Tag | `` |
+| Folder | Description | Schema | Produced by | Tag |
+|---|---|---|---|---|
+| `target` | _…_ | _…_ | _…_ | `` |
