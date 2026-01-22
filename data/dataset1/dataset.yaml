@@ -2,7 +2,7 @@ created: '2026-01-22'
 updated: '2026-01-22'
 name: dataset1
 tag: mytag
-version: 200.1.0
+version: 300.1.0
 status: draft
 description: ''
 components:
@@ -11,10 +11,10 @@ components:
     description: ''
     schema: null
     produced_by: null
-    tag: dataset1-raw-200.1.0
+    tag: dataset1-raw-300.1.0
   target:
     path: target
     description: ''
     schema: null
     produced_by: null
-    tag: dataset1-target-200.1.0
+    tag: dataset1-target-300.1.0
