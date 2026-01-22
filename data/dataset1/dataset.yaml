@@ -11,9 +11,11 @@ components:
     schema: null
     produced_by: null
     tag: dataset1-raw-v2
+    tags: []
   target:
     path: target
     description: ''
     schema: null
     produced_by: null
     tag: dataset1-target-v2
+    tags: []

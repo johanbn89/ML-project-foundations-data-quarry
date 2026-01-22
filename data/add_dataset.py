@@ -61,7 +61,13 @@ _Describe what this dataset is and what it’s for._
 
 | Folder | Description | Schema | Produced by | Tag |
 |---|---|---|---|---|
+{% if c.tags %}
+{% for t in c.tags %}
+| `{{ c.path }}` | {{ c.description or "_…_" }} | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} | `{{ t }}` |
+{% endfor %}
+{% else %}
 | `{{ c.path }}` | {{ c.description or "_…_" }} | {{ ("`" ~ c.schema ~ "`") if c.schema else "_…_" }} | {{ ("`" ~ c.produced_by ~ "`") if c.produced_by else "_…_" }} | `{{ c.tag }}` |
+{% endif %}
 
 {%- endfor %}
 
@@ -138,7 +144,14 @@ def _component_tag(dataset_name: str, component_name: str, tag_version: int) -> 
     return f"{dataset_name}-{component_name}-v{tag_version}"
 
 
-def _ensure_components(meta: Dict[str, Any], dataset_dir: Path, components: List[str], *, tag_version: int) -> None:
+def _ensure_components(
+    meta: Dict[str, Any],
+    dataset_dir: Path,
+    components: List[str],
+    *,
+    tag_version: int,
+    changed_any: bool,
+) -> None:
     meta_components = _as_dict(meta.get("components"))
     meta["components"] = meta_components
 
@@ -162,8 +175,20 @@ def _ensure_components(meta: Dict[str, Any], dataset_dir: Path, components: List
         entry.setdefault("schema", None)
         entry.setdefault("produced_by", None)
 
-        # Always derive per-component tag from dataset + component + tag_version
-        entry["tag"] = _component_tag(dataset_name, cname, tag_version)
+        new_tag = _component_tag(dataset_name, cname, tag_version)
+
+        # Keep a growing tag history per component
+        tags_val = entry.get("tags", [])
+        tags: List[str] = tags_val if isinstance(tags_val, list) else []
+        tags = [str(t) for t in tags if str(t)]
+
+        # Only append when data actually changed (i.e., when we bumped)
+        if changed_any:
+            if not tags or tags[-1] != new_tag:
+                tags.append(new_tag)
+
+        entry["tags"] = tags
+        entry["tag"] = tags[-1] if tags else new_tag
 
 
 def _render_readme(meta: Dict[str, Any]) -> str:
@@ -179,12 +204,16 @@ def _render_readme(meta: Dict[str, Any]) -> str:
     safe_components: Dict[str, Dict[str, Any]] = {}
     for cname in components_order:
         raw = _as_dict(components.get(cname))
+        tags_val = raw.get("tags", [])
+        tags = [str(t) for t in tags_val] if isinstance(tags_val, list) else []
+
         safe_components[cname] = {
             "path": raw.get("path", cname),
             "description": raw.get("description", ""),
             "schema": raw.get("schema", None),
             "produced_by": raw.get("produced_by", None),
             "tag": raw.get("tag", ""),
+            "tags": tags,
         }
 
     return (
@@ -347,8 +376,8 @@ def main() -> int:
         meta["tag_version"] = tag_version
         print(f"[tag] no data change -> keep tag_version at v{tag_version}")
 
-    # 3) Ensure YAML component entries + derived tags
-    _ensure_components(meta, dataset_dir, components, tag_version=tag_version)
+    # 3) Ensure YAML component entries + derived tags (and tag history)
+    _ensure_components(meta, dataset_dir, components, tag_version=tag_version, changed_any=changed_any)
 
     # 4) Write dataset.yaml, README.md, and data/README.md index
     _write_yaml(meta_path, meta)

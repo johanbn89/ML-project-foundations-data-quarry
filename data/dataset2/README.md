@@ -6,9 +6,10 @@ _Describe what this dataset is and what it’s for._
 
 | Folder | Description | Schema | Produced by | Tag |
 |---|---|---|---|---|
-| `raw` | _…_ | _…_ | _…_ | `dataset2-raw-v1` |
+| `raw` | _…_ | _…_ | _…_ | `dataset2-raw-v2` |
+
 ### `target`
 
 | Folder | Description | Schema | Produced by | Tag |
 |---|---|---|---|---|
-| `target` | _…_ | _…_ | _…_ | `dataset2-target-v1` |
+| `target` | _…_ | _…_ | _…_ | `dataset2-target-v2` |
