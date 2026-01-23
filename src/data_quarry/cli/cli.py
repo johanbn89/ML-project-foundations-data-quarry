@@ -1,13 +1,22 @@
-# NOTE:
-# We intentionally persist both env vars and a config file here as a practice
-# exercise. Env vars represent the common integration surface for training code,
-# shells, and Docker/CI, while the config file demonstrates how structured,
-# extensible configuration could be handled as the system grows.
-# In a production setup, one mechanism should be preferred to avoid duplication.
+# This may feel a bit overkill at first glance.
+# We currently derive only two paths from the repo root, and these could
+# technically be resolved at runtime when needed.
 #
-# Both env vars and a config file are written here as a practice exercise to
-# illustrate different integration patterns. In production, prefer a single
-# source of truth to avoid duplication.
+# However, if we want to change the CWD to this repository, we must already
+# know where it is located. Centralizing this logic also makes it trivial
+# to extend the setup with additional configuration options later
+# (e.g. user-defined parameters).
+#
+# NOTE:
+# We intentionally persist both environment variables and a config file here
+# as a practice exercise. Environment variables represent a common integration
+# surface for training code, shells, and Docker/CI, while the config file
+# demonstrates how structured, extensible configuration could be handled
+# as the system grows.
+#
+# In a production setup, one mechanism should be preferred to avoid
+# duplication and ensure a single source of truth.
+
 
 from __future__ import annotations
 
