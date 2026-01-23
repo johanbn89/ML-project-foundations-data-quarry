@@ -17,6 +17,7 @@ Install Python and project dependencies in an isolated environment and set up th
 uv sync
 uv run data-repo-setup setup
 ```
+Add uv run data-repo-setup remote url-to-remote  ????
 
 ### Configure the DVC cache location
 
