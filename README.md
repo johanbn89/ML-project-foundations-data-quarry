@@ -15,6 +15,7 @@ Install Python and project dependencies in an isolated environment and set up th
 
 ```bash
 uv sync
+uv sync --group dev
 uv run data-repo-setup setup
 ```
 ### Administrator / Repo Owner (one-time or when changing remote)
