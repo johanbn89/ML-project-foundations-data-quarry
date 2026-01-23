@@ -24,6 +24,32 @@ Run once from the repository root and commit the result:
 ```bash
 uv run data-quarry set-dvc-remote --name storage --url s3://my-company-data/dvc --commit
 ```
+---
+### Required credentials / secrets per environment when using a remote
+
+#### Local development
+- Developers must configure credentials for the shared DVC remote locally
+- Credentials are **not** stored in `.dvc/config`
+- Typical mechanisms:
+  - Cloud provider CLIs (e.g. `aws configure`, `az login`, `gcloud auth login`) **most common**
+  - Environment variables
+  - Entries in `.dvc/config.local`
+ 
+#### CI / automated environments
+- Credentials must be provided explicitly by the CI system
+- Common approaches:
+  - CI-managed secrets injected as environment variables **like this**
+  - Service accounts / IAM roles assigned to the runner
+  - Mounted credential files (never committed to the repo)
+
+#### Best practice:
+- Store secrets in the CI platform’s secret manager
+- Inject them at runtime
+- Do not rely on developer-local configuration in CI
+
+
+---
+
 
 ### Configure the DVC cache location
 
@@ -43,7 +69,6 @@ Use `--local` for ephemeral environments (e.g. CI), where configuration should
 apply only for the lifetime of the job and must not tracked by git. 
 
 ---
-
 ## Repository layout
 
 ```text
@@ -302,5 +327,4 @@ Runtime helpers (e.g. get_file_paths) intentionally mutate the data repo working
 - Document the DVC remote setup:
   - Where the remote is configured (dvc config files)
   - Required credentials/secrets per environment (local vs CI)
-  - How to run dvc pull for a specific dataset (dvc pull data/<dataset>/dvc.dvc)
-  - How to add/change data and push updates (dvc add, git commit, git tag, dvc push)
+
