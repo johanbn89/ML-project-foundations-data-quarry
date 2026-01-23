@@ -203,8 +203,23 @@ Cleaned, transformed, or feature-engineered data derived from `raw/`.
 `target/`  
 Ground-truth or label data, e.g. annotations, outcomes, or other target variables derived from the source data.
 
+## TODOs
 
-## DVC Remote
+- Document how to use this repository from another repository’s CI pipeline (e.g. GitHub Actions):
+  - Check out the code repo
+  - Check out this data repo into a subfolder (e.g. _data_repo) with tags (fetch-depth: 0)
+  - Set DATA_REPO_ROOT and DATA_ROOT to that checkout
+  - Run tests/integration steps that call get_file_paths()
+  - (Optional) cache DVC cache to speed up repeated runs
 
-Data is stored remotely using DVC. This need to be configured to work. 
-TODO: Add this when remote is added.
+- Document the DVC remote setup:
+  - Where the remote is configured (dvc config files)
+  - Required credentials/secrets per environment (local vs CI)
+  - How to run dvc pull for a specific dataset (dvc pull data/<dataset>/dvc.dvc)
+  - How to add/change data and push updates (dvc add, git commit, git tag, dvc push)
+
+- Refactor CLI:
+  - Move command implementations out of cli.py into a commands/ package
+  - Keep cli.py as a thin argument-parsing and dispatch layer
+  - Add tests for individual commands
+
