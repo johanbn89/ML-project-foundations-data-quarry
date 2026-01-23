@@ -229,9 +229,9 @@ Ground-truth or label data, e.g. annotations, outcomes, or other target variable
 
   The cache can be configured to live outside the repository. This addresses several practical concerns:
 
-- Persistent storage in cloud environments
-- Using local storage on a different disk than the codebase
-- Avoiding tight coupling between code location and data storage
+    - Persistent storage in cloud environments
+    - Using local storage on a different disk than the codebase
+    - Avoiding tight coupling between code location and data storage
 
 Together, these choices make dataset management more flexible and scalable across local development, CI, and cloud setups.
 
@@ -278,13 +278,13 @@ But these are uncommon corner cases.
 If any component of a dataset changes, a new dataset version is created. Per-component diffs are not tracked. This keeps reproducibility simple and avoids invalid combinations of components.
 
 ### Multiple datasets, different versions are supported.
-Training or evaluation can safely use multiple datasets at different tags, since each dataset lives in its own folder.
+Training or evaluation can safely use multiple datasets at different tags, since each dataset lives in its own folder and it is assumed one tag is for one \<dataset\> only.
 
 ### Multiple versions of the same dataset in one run are out of scope.
-This is not considered an important use case. If ever needed, it should be handled via separate checkouts, not within a single working tree.
+This is not considered an important use case. Using directly using cache paths is not safe. If ever needed, it should be handled via separate checkouts, not within a single working tree.  
 
 ### Dataset-wide DVC pulls trade granularity for simplicity.
-dvc pull data/<dataset>/dvc.dvc materializes all components of a dataset. This is usually acceptable because DVC caches data efficiently in persistent environments. Finer-grained pulls can be added later if needed.
+dvc pull data/\<dataset\>/dvc.dvc materializes all components of a dataset. This is usually acceptable because DVC caches data efficiently in persistent environments. Finer-grained should not be needed since we assume data lineage should cover old verisions. 
 
 ### Ephemeral environments (CI)
 Ephemeral environments are supported by design through the use of environment variables, ensuring correct behavior without relying on persistent state.
