@@ -205,37 +205,7 @@ Cleaned, transformed, or feature-engineered data derived from `raw/`.
 `target/`  
 Ground-truth or label data, e.g. annotations, outcomes, or other target variables derived from the source data.
 
-## TODOs
-
-- Document how to use this repository from another repository’s CI pipeline (e.g. GitHub Actions):
-  - Check out the code repo
-  - Check out this data repo into a subfolder (e.g. _data_repo) with tags (fetch-depth: 0)
-  - Set DATA_REPO_ROOT and DATA_ROOT to that checkout
-  - Run tests/integration steps that call get_file_paths()
-  - (Optional) cache DVC cache to speed up repeated runs  
-
-- Document the DVC remote setup:
-  - Where the remote is configured (dvc config files)
-  - Required credentials/secrets per environment (local vs CI)
-  - How to run dvc pull for a specific dataset (dvc pull data/<dataset>/dvc.dvc)
-  - How to add/change data and push updates (dvc add, git commit, git tag, dvc push)
-
-- Refactor CLI:
-  - Move command implementations out of cli.py into a commands/ package
-  - Keep cli.py as a thin argument-parsing and dispatch layer
-  - Add tests for individual commands
-
-- Configurable cache location
-
-  The cache can be configured to live outside the repository. This addresses several practical concerns:
-
-    - Persistent storage in cloud environments
-    - Using local storage on a different disk than the codebase
-    - Avoiding tight coupling between code location and data storage
-
-Together, these choices make dataset management more flexible and scalable across local development, CI, and cloud setups.
-
-
+---
 
 ## Design rationale & corner cases
 
@@ -293,3 +263,36 @@ In CI, the data repository is checked out per job, required data is pulled on de
 
 ### Working tree mutation is explicit and controlled.
 Runtime helpers (e.g. get_file_paths) intentionally mutate the data repo working tree. They should be used only in controlled environments and are not safe for concurrent use against the same checkout.
+
+---
+
+## TODOs
+
+- Document how to use this repository from another repository’s CI pipeline (e.g. GitHub Actions):
+  - Check out the code repo
+  - Check out this data repo into a subfolder (e.g. _data_repo) with tags (fetch-depth: 0)
+  - Set DATA_REPO_ROOT and DATA_ROOT to that checkout
+  - Run tests/integration steps that call get_file_paths()
+  - (Optional) cache DVC cache to speed up repeated runs  
+
+- Document the DVC remote setup:
+  - Where the remote is configured (dvc config files)
+  - Required credentials/secrets per environment (local vs CI)
+  - How to run dvc pull for a specific dataset (dvc pull data/<dataset>/dvc.dvc)
+  - How to add/change data and push updates (dvc add, git commit, git tag, dvc push)
+
+- Refactor CLI:
+  - Move command implementations out of cli.py into a commands/ package
+  - Keep cli.py as a thin argument-parsing and dispatch layer
+  - Add tests for individual commands
+
+- Configurable cache location
+
+  The cache can be configured to live outside the repository. This addresses several practical concerns:
+
+    - Persistent storage in cloud environments
+    - Using local storage on a different disk than the codebase
+    - Avoiding tight coupling between code location and data storage
+
+Together, these choices make dataset management more flexible and scalable across local development, CI, and cloud setups.
+
