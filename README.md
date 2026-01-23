@@ -161,7 +161,9 @@ Required environment variables
 
 Behavior
 
-1. Change directory to DATA_REPO_ROOT in an isolated subprocess.
+1. All commands are executed from the correct working directory (CWD).
+   The CWD is resolved from environment variables and does not rely on the
+   caller’s current shell location.
 2. Run git checkout <ref>.
 3. Run dvc pull data/<dataset>/dvc.dvc.
 4. Return file paths under data/<dataset>/dvc/<component>/**.
@@ -210,7 +212,7 @@ Ground-truth or label data, e.g. annotations, outcomes, or other target variable
   - Check out this data repo into a subfolder (e.g. _data_repo) with tags (fetch-depth: 0)
   - Set DATA_REPO_ROOT and DATA_ROOT to that checkout
   - Run tests/integration steps that call get_file_paths()
-  - (Optional) cache DVC cache to speed up repeated runs
+  - (Optional) cache DVC cache to speed up repeated runs  
 
 - Document the DVC remote setup:
   - Where the remote is configured (dvc config files)
@@ -223,3 +225,66 @@ Ground-truth or label data, e.g. annotations, outcomes, or other target variable
   - Keep cli.py as a thin argument-parsing and dispatch layer
   - Add tests for individual commands
 
+- Cache-relative file paths:
+
+    `get_file_paths` derives file paths relative to the cache directory.  
+     This allows multiple versions of the same dataset to coexist without collisions, as long as resolution happens in a single-threaded flow.
+
+- Configurable cache location
+
+  The cache can be configured to live outside the repository. This addresses several practical concerns:
+
+- Persistent storage in cloud environments
+- Using local storage on a different disk than the codebase
+- Avoiding tight coupling between code location and data storage
+
+Together, these choices make dataset management more flexible and scalable across local development, CI, and cloud setups.
+
+
+
+## Design rationale & corner cases
+
+### Corner case: mixed lineage across versions
+
+Example lineage:
+raw1 → raw2 → processed1
+
+A dataset tag represents a coherent snapshot of the dataset at a point in time. In the latest snapshot we may have components {raw2, processed1}. If we want to use {raw1, processed1}, that combination is not represented by a single tag.
+
+This is not necessarily a design flaw. The intent is that versions are snapshots, not a composable graph of components. Mixing an older raw component with a newer derived component typically does not make sense, because the derived component (processed1) is expected to correspond to the raw state in the same snapshot.
+
+In other words, it is generally safe to assume that the latest snapshot “covers” the old one, and that selecting raw1 together with processed1 is either invalid or a debugging-only workflow, not something the versioning model needs to support.
+
+The dataset README shows how components evolve over time.
+
+### Design tradeoff: dataset-wide pulls vs component-level pulls
+
+With the current design, we pull at dataset granularity (e.g. `dvc pull data/<dataset>/dvc.dvc`), which materializes all components of that dataset (raw, target, processed, etc.). This can look wasteful if a job only needs a subset of components.
+
+In practice, this is usually acceptable because DVC relies on a cache. In persistent environments (local machines, long-lived training servers, or cloud runners with a stable cache), repeated pulls are incremental and deduplicated, so “pull everything” is simpler without a large ongoing cost.
+
+Where this can become a limitation is on constrained or ephemeral environments:
+- machines with limited disk where each training run must pull data and then delete it afterwards
+- jobs where we intentionally avoid keeping a local cache between runs
+
+But these are uncommon corner cases. 
+
+### Coarse-grained versioning is intentional.
+If any component of a dataset changes, a new dataset version is created. Per-component diffs are not tracked. This keeps reproducibility simple and avoids invalid combinations of components.
+
+### Multiple datasets, different versions are supported.
+Training or evaluation can safely use multiple datasets at different tags, since each dataset lives in its own folder.
+
+### Multiple versions of the same dataset in one run are out of scope.
+This is not considered an important use case. If ever needed, it should be handled via separate checkouts, not within a single working tree.
+
+### Dataset-wide DVC pulls trade granularity for simplicity.
+dvc pull data/<dataset>/dvc.dvc materializes all components of a dataset. This is usually acceptable because DVC caches data efficiently in persistent environments. Finer-grained pulls can be added later if needed.
+
+### Ephemeral environments (CI)
+Ephemeral environments are supported by design through the use of environment variables, ensuring correct behavior without relying on persistent state.
+
+In CI, the data repository is checked out per job, required data is pulled on demand, and everything is discarded afterward. Caching the DVC cache is an optional optimization to speed up repeated runs, not a requirement for correctness.
+
+### Working tree mutation is explicit and controlled.
+Runtime helpers (e.g. get_file_paths) intentionally mutate the data repo working tree. They should be used only in controlled environments and are not safe for concurrent use against the same checkout.
