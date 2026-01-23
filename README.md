@@ -9,6 +9,17 @@ This repository combines application code (src/), dataset-specific developer uti
 
 ---
 
+## Setup
+
+Install Python and project dependencies in an isolated environment and set up the data repository so it is easily discoverable by other repositories that depend on it.
+
+```bash
+uv sync
+uv run data-repo-setup setup
+```
+
+---
+
 ## Repository layout
 
 ```text
@@ -131,47 +142,38 @@ The user remains in control of committing, tagging and pushing. **Maybe TODO, ma
 
 ### get_file_paths.py — runtime data access helper
 
-Used at runtime (training, evaluation, pipelines) to materialize dataset files
-for a specific dataset version.
+Used at runtime (training, evaluation, pipelines) to materialize dataset files for a specific dataset version.
 
-typically used by, 
+Typically used as:
 
-```python
 from data_quarry.tools import get_file_paths
-```
 
-Inputs:
+Inputs
 
-- ref — git commit hash or dataset tag (e.g. dataset1-v3)
+- ref — Git commit hash or dataset tag (e.g. dataset1-v3)
 - dataset — dataset folder name
-- components — list of component names (["raw", "target"])
+- components — list of component names (e.g. ["raw", "target"])
 
-Required environment variables:
+Required environment variables
 
-- DATA_REPO_ROOT — path to the repo root (where .git and DVC config live)
-- DATA_ROOT — path to the data/ directory inside that repo
+- DATA_REPO_ROOT — path to the data repository root (where .git and DVC configuration live)
+- DATA_ROOT — path to the data/ directory inside that repository
 
-Behavior:
+Behavior
 
-1. git checkout \<ref\>
-2. dvc pull data/\<dataset\>/dvc.dvc
-3. Return file paths under:
-   data/\<dataset\>/dvc/\<component\>/**
+1. Change directory to DATA_REPO_ROOT in an isolated subprocess.
+2. Run git checkout <ref>.
+3. Run dvc pull data/<dataset>/dvc.dvc.
+4. Return file paths under data/<dataset>/dvc/<component>/**.
 
-Important:
+**Important:**
 
 This function mutates the repository working tree by design.
-It should be used in controlled environments (local dev, CI jobs, containers).
+It should be used only in controlled environments (local development, CI jobs, containers),
+where the correct behavior is enforced via the environment variables above.
+
 
 ---
-
-## Setup
-
-Install dependencies using:
-should add remote here???
-```bash
-uv sync
-```
 
 ## Manually working dvc. Not intended or to recommend.
 
