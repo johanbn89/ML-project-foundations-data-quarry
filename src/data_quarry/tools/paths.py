@@ -1,21 +1,3 @@
-# get_file_paths.py
-"""
-get_file_paths.py
-
-Want a function that
-in its own subprocess (so that the cwd change does not affect the main process).
-Input:
-    - commit-or-tag
-    - data-set-name (to find the data repo path)
-Actions:
-    - cd env(DATA_REPO_ROOT)
-    - git checkout commit-or-tag
-    - dvc pull data/<dataset>/dvc
-    - derive paths from data-set-name and env(DATA_ROOT)
-Output:
-    - list of file paths (str) to the data files for the given data-set-name
-"""
-
 from __future__ import annotations
 
 import os
@@ -89,12 +71,6 @@ def _run(cwd: Path, cmd: Iterable[str]) -> None:
 def _collect_files(dvc_dataset_dir: Path, components: Sequence[str]) -> DatasetFiles:
     """
     Collect files for named dataset components inside the dataset DVC folder.
-
-    Structure:
-      dataset/
-        dvc/
-          raw/
-          target/
     """
     result: DatasetFiles = {}
 

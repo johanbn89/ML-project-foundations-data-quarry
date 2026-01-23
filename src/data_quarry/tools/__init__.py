@@ -5,7 +5,7 @@
 # - You may move or rename internal modules later and want to avoid breaking imports
 # - You want to document what is public vs internal
 
-from .get_file_paths import get_file_paths
+from .paths import get_file_paths
 
 # for controlling import * behavior and,
 # - __all__ documents public API
