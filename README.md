@@ -17,7 +17,16 @@ Install Python and project dependencies in an isolated environment and set up th
 uv sync
 uv run data-repo-setup setup
 ```
-Add uv run data-repo-setup remote url-to-remote  ????
+### Administrator / Repo Owner (one-time or when changing remote)
+
+Run once from the repository root and commit the result:
+
+```bash
+uv run data-quarry set-dvc-remote \
+  --name storage \
+  --url s3://my-company-data/dvc \
+  --commit
+```
 
 ### Configure the DVC cache location
 
