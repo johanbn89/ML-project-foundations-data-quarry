@@ -38,7 +38,7 @@ uv run data-quarry set-dvc-remote --name storage --url s3://my-company-data/dvc 
 #### CI / automated environments
 - Credentials must be provided explicitly by the CI system
 - Common approaches:
-  - CI-managed secrets injected as environment variables **like this**
+  - CI-managed secrets injected as environment variables
   - Service accounts / IAM roles assigned to the runner
   - Mounted credential files (never committed to the repo)
 
