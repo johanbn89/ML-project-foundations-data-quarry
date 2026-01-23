@@ -48,7 +48,7 @@ data/
 
 - A dataset can consist of multiple **components**, e.g. `raw`, `target`, `features`.
 
-- The `dvc/` folder is the root for DVC-tracked data. It is not present after a fresh clone and is created on demand by `dvc pull`.
+- The `data/<dataset>dvc/` folder is the root for DVC-tracked data. It is not present after a fresh clone and is created on demand by `dvc pull`.
 
 - Only data under  
   `data/<dataset>/dvc/**`  
