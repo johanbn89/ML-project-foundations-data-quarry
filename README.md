@@ -18,6 +18,23 @@ uv sync
 uv run data-repo-setup setup
 ```
 
+### Configure the DVC cache location
+
+In some cases, a custom DVC cache directory is required, for example when:
+
+- The data disk is different from the code disk
+- Persistent storage is needed (e.g. CI in GitHub Actions or cloud environments)
+- Disk space or performance constraints require placing the cache on a specific volume
+
+
+```bash
+dvc config cache.dir /path/to/dvc-cache
+```
+This writes to .dvc/config (or .dvc/config.local if using --local)
+
+Use `--local` for ephemeral environments (e.g. CI), where configuration should
+apply only for the lifetime of the job and must not tracked by git. 
+
 ---
 
 ## Repository layout
