@@ -28,20 +28,17 @@ import tomli_w
 import typer
 from platformdirs import user_config_dir
 
-setup_app = typer.Typer(add_completion=False, no_args_is_help=True)
+setup_app = typer.Typer(add_completion=False)
 
 CONFIG_APP_NAME = "data-quarry"
 CONFIG_FILE_NAME = "config.toml"
 
-# Environment variable names (external contract)
 ENV_REPO_ROOT = "DATA_REPO_ROOT"
 ENV_DATA_ROOT = "DATA_ROOT"
 
 
 @dataclass(frozen=True)
 class DQConfig:
-    """Machine-local configuration for the data repo checkout."""
-
     repo_root: str
     data_root: str
 
@@ -52,25 +49,18 @@ class DQConfig:
         return DQConfig(repo_root=str(repo_root), data_root=str(data_root))
 
 
-def config_filepath() -> Path:
-    """
-    Per-user, per-machine config path.
-
-    We store machine-specific filesystem locations outside the repo because they are
-    not portable across machines/environments. Docker/CI should set env vars explicitly.
-    """
+def _config_filepath() -> Path:
     return Path(user_config_dir(CONFIG_APP_NAME)) / CONFIG_FILE_NAME
 
 
-def write_config(cfg: DQConfig) -> Path:
-    path = config_filepath()
+def _write_config(cfg: DQConfig) -> Path:
+    path = _config_filepath()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(tomli_w.dumps(asdict(cfg)).encode("utf-8"))
     return path
 
 
-def require_repo_root_from_cwd() -> Path:
-    """Require running from repo root (where `.dvc/` exists)."""
+def _repo_root_from_cwd() -> Path:
     repo_root = Path.cwd().resolve()
     if not (repo_root / ".dvc").is_dir():
         raise typer.BadParameter(
@@ -80,19 +70,14 @@ def require_repo_root_from_cwd() -> Path:
     return repo_root
 
 
-def env_map(cfg: DQConfig) -> dict[str, str]:
-    # Explicit mapping: env vars are an external interface, not 1:1 with config fields.
+def _env_map(cfg: DQConfig) -> dict[str, str]:
     return {
         ENV_REPO_ROOT: cfg.repo_root,
         ENV_DATA_ROOT: cfg.data_root,
     }
 
 
-def persist_env_windows(envs: dict[str, str]) -> None:
-    """
-    Persist env vars for the current USER via `setx` (Windows only).
-    Note: this affects *new* shells; it cannot modify already-running terminals.
-    """
+def _persist_env_windows(envs: dict[str, str]) -> None:
     if sys.platform != "win32":
         raise typer.BadParameter("Windows only for now (persist uses setx).")
 
@@ -103,22 +88,8 @@ def persist_env_windows(envs: dict[str, str]) -> None:
             raise typer.BadParameter(f"Failed to persist {k} via setx. {msg}".strip())
 
 
-def format_success_message(cfg_path: Path, cfg: DQConfig, envs: dict[str, str]) -> str:
-    lines: list[str] = []
-    lines.append(f"Config written: {cfg_path}")
-    lines.append(f"Repo root:      {cfg.repo_root}")
-    lines.append(f"Data root:      {cfg.data_root}")
-    lines.append("")
-    lines.append("Environment variables persisted for USER:")
-    for k in envs:
-        lines.append(f"  {k}")
-    lines.append("")
-    lines.append("NOTE: Restart your terminal (CMD / PowerShell) for changes to take effect.")
-    return "\n".join(lines)
-
-
-@setup_app.command("register")
-def register(
+@setup_app.callback(invoke_without_command=True)
+def setup(
     repo: Optional[Path] = typer.Option(
         None,
         "--repo",
@@ -132,12 +103,20 @@ def register(
     - Writes machine-local config to the OS user config directory
     - Persists DATA_REPO_ROOT and DATA_ROOT for the user via `setx`
     """
-    repo_root = repo.resolve() if repo else require_repo_root_from_cwd()
+    repo_root = repo.resolve() if repo else _repo_root_from_cwd()
 
     cfg = DQConfig.from_repo_root(repo_root)
-    cfg_path = write_config(cfg)
+    cfg_path = _write_config(cfg)
 
-    envs = env_map(cfg)
-    persist_env_windows(envs)
+    envs = _env_map(cfg)
+    _persist_env_windows(envs)
 
-    typer.echo(format_success_message(cfg_path, cfg, envs))
+    typer.echo(f"Config written: {cfg_path}")
+    typer.echo(f"Repo root:      {cfg.repo_root}")
+    typer.echo(f"Data root:      {cfg.data_root}")
+    typer.echo("")
+    typer.echo("Environment variables persisted for USER:")
+    for k in envs:
+        typer.echo(f"  {k}")
+    typer.echo("")
+    typer.echo("NOTE: Restart your terminal (CMD / PowerShell) for changes to take effect.")
