@@ -298,8 +298,3 @@ Runtime helpers (e.g. get_file_paths) intentionally mutate the data repo working
   - Required credentials/secrets per environment (local vs CI)
   - How to run dvc pull for a specific dataset (dvc pull data/<dataset>/dvc.dvc)
   - How to add/change data and push updates (dvc add, git commit, git tag, dvc push)
-
-- Refactor CLI:
-  - Move command implementations out of cli.py into a commands/ package
-  - Keep cli.py as a thin argument-parsing and dispatch layer
-  - Add tests for individual commands
