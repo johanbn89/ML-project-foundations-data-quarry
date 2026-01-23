@@ -316,15 +316,11 @@ Runtime helpers (e.g. get_file_paths) intentionally mutate the data repo working
 ---
 
 ## TODOs
-
+- Migrate to cloud
 - Document how to use this repository from another repository’s CI pipeline (e.g. GitHub Actions):
   - Check out the code repo
   - Check out this data repo into a subfolder (e.g. _data_repo) with tags (fetch-depth: 0)
   - Set DATA_REPO_ROOT and DATA_ROOT to that checkout
   - Run tests/integration steps that call get_file_paths()
-  - (Optional) cache DVC cache to speed up repeated runs  
-
-- Document the DVC remote setup:
-  - Where the remote is configured (dvc config files)
-  - Required credentials/secrets per environment (local vs CI)
+  - (Optional) cache DVC cache to speed up repeated runs
 
