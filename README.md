@@ -22,10 +22,7 @@ uv run data-repo-setup setup
 Run once from the repository root and commit the result:
 
 ```bash
-uv run data-quarry set-dvc-remote \
-  --name storage \
-  --url s3://my-company-data/dvc \
-  --commit
+uv run data-quarry set-dvc-remote --name storage --url s3://my-company-data/dvc --commit
 ```
 
 ### Configure the DVC cache location
