@@ -14,7 +14,6 @@ This repository combines application code (src/), dataset-specific developer uti
 Install Python and project dependencies in an isolated environment and set up the data repository so it is easily discoverable by other repositories that depend on it.
 
 ```bash
-uv sync
 uv sync --group dev
 uv run data-repo-setup setup
 ```
