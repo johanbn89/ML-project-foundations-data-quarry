@@ -225,11 +225,6 @@ Ground-truth or label data, e.g. annotations, outcomes, or other target variable
   - Keep cli.py as a thin argument-parsing and dispatch layer
   - Add tests for individual commands
 
-- Cache-relative file paths:
-
-    `get_file_paths` derives file paths relative to the cache directory.  
-     This allows multiple versions of the same dataset to coexist without collisions, as long as resolution happens in a single-threaded flow.
-
 - Configurable cache location
 
   The cache can be configured to live outside the repository. This addresses several practical concerns:
@@ -243,6 +238,16 @@ Together, these choices make dataset management more flexible and scalable acros
 
 
 ## Design rationale & corner cases
+
+### Configurable cache location
+The cache can be configured to live outside the repository. This addresses several practical concerns:
+
+- Persistent storage in cloud environments
+- Using local storage on a different disk than the codebase
+- Avoiding tight coupling between code location and data storage
+
+Together, these choices make dataset management more flexible and scalable across local development, CI, and cloud setups.
+
 
 ### Corner case: mixed lineage across versions
 
