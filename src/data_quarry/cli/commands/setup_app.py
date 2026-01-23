@@ -22,7 +22,6 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
 
 import tomli_w
 import typer
@@ -89,21 +88,13 @@ def _persist_env_windows(envs: dict[str, str]) -> None:
 
 
 @setup_app.callback(invoke_without_command=True)
-def setup(
-    repo: Optional[Path] = typer.Option(
-        None,
-        "--repo",
-        "-r",
-        help="Path to the data repo root. If omitted, current directory must contain `.dvc/`.",
-    ),
-) -> None:
+def setup() -> None:
     """
     Register this data repo checkout on the current machine (Windows only).
 
-    - Writes machine-local config to the OS user config directory
-    - Persists DATA_REPO_ROOT and DATA_ROOT for the user via `setx`
+    Must be run from the repository root (where `.dvc/` exists).
     """
-    repo_root = repo.resolve() if repo else _repo_root_from_cwd()
+    repo_root = _repo_root_from_cwd()
 
     cfg = DQConfig.from_repo_root(repo_root)
     cfg_path = _write_config(cfg)

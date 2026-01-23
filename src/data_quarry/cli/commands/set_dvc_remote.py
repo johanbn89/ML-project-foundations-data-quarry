@@ -21,7 +21,7 @@ def run(cmd: list[str]) -> None:
 def set_dvc_remote(
     name: str = typer.Option(..., "--name", "-n", help="DVC remote name"),
     url: str = typer.Option(..., "--url", "-u", help="DVC remote URL"),
-    commit: bool = typer.Option(False, "--commit", help="Commit changes to git"),
+    commit: bool = typer.Option(True, "--commit", help="Commit changes to git"),
 ) -> None:
     """
     Configure a DVC remote.
