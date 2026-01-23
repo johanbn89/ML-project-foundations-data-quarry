@@ -165,8 +165,8 @@ Behavior
    The CWD is resolved from environment variables and does not rely on the
    caller’s current shell location.
 2. Run git checkout <ref>.
-3. Run dvc pull data/<dataset>/dvc.dvc.
-4. Return file paths under data/<dataset>/dvc/<component>/**.
+3. Run dvc pull data/\<dataset\>/dvc.dvc.
+4. Return file paths under data/\<dataset\>/dvc/<component>/**.
 
 **Important:**
 
