@@ -45,7 +45,9 @@ def get_file_paths(
     dvc_dir = dataset_dir / DVC_SUBDIR_NAME
     dvc_rel = dvc_dir.relative_to(repo_root).as_posix()
     _run(repo_root, ["dvc", "pull", dvc_rel])
-
+    print(f"Pulled DVC data for dataset '{dataset}' at ref '{ref}'.")
+    print(f"Dataset DVC folder: {dvc_dir}")
+    print(f"Dataset components: {components}")
     return _collect_files(dvc_dir, components)
 
 
