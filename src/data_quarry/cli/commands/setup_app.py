@@ -6,6 +6,7 @@
 # know where it is located. Centralizing this logic also makes it trivial
 # to extend the setup with additional configuration options later
 # (e.g. user-defined parameters).
+# It also resolving local install of this repo in a consistent manner
 #
 # NOTE:
 # We intentionally persist both environment variables and a config file here
