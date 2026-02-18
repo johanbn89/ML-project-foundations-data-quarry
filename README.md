@@ -144,7 +144,7 @@ It contains:
 
 A new row appearing in a component table implicitly means:
 
-Some **components** of the dataset data changed for that version. As a result, all present components receive an additional row with the new dataset tag, even if only a subset of components changed.
+Some **components** of the dataset data changed for that version. As a result, all present components is associated to the new dataset tag, even if only a subset of components changed.
 
 ---
 
