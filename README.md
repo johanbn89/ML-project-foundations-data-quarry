@@ -88,7 +88,7 @@ apply only for the lifetime of the job and must not tracked by git.
 ```text
 data/
 ├─ README.md                # Auto-generated dataset index (maintained by add_dataset.py)
-├─ add_dataset.py           # Local dev helper for registering & versioning datasets
+├─ add_dataset.py           # Publishes dataset data, metadata, commits, and tags
 │
 ├─ <dataset_name>/          # One dataset per folder
 │  ├─ dataset.yaml          # Dataset metadata + component registry + tag history (git-tracked)
@@ -151,42 +151,29 @@ Some **components** of the dataset data changed for that version. As a result, a
 
 ## Tooling
 
-### data/add_dataset.py — dataset registration & versioning
+### data/add_dataset.py — dataset publishing
 
-A local developer helper used when adding or updating dataset data.
-Developers first create or update the relevant folders and files under data/\<dataset\>/dvc/, then run this script to register and version the dataset.
+A developer command used to register, version, and publish dataset data.
+Create or update files under `data/<dataset>/dvc/`, then run:
+
+```bash
+uv run python data/add_dataset.py some_dataset
+```
 
 What the script does:
 
-1. Discovers dataset components under:
-   data/\<dataset\>/dvc/
-2. Runs:
-   dvc add data/\<dataset\>/dvc
-3. Detects whether dvc.dvc changed
-4. If data changed:
-   - Increments tag_version in dataset.yaml
-   - Produces a new dataset tag: \<dataset\>-vN
-5. Appends the dataset tag to all components
-6. Regenerates:
-   - data/\<datase\>/dataset.yaml
-   - data/\<dataset\>/README.md
-   - data/README.md (dataset index)
+1. Verifies that the Git index is clean and the current branch matches `origin`.
+2. Discovers components and runs `dvc add data/<dataset>/dvc`.
+3. If the data changed, uploads it with `dvc push` and assigns the next
+   `<dataset>-vN` tag.
+4. Regenerates `dataset.yaml`, the dataset README, and `data/README.md`.
+5. Stages and commits only the generated dataset files.
+6. Atomically pushes the commit and new tag to the current branch on `origin`.
 
-Typical usage:
-```bash
-uv run python data/add_dataset.py --name some_dataset
-```
-
-What it prints:
-
-```bash
-git add data/some_dataset/dataset.yaml data/some_dataset/README.md data/README.md
-git add data/some_dataset/dvc.dvc
-git commit -m "Add/update dataset some_dataset"
-git tag some_dataset-v3
-```
-
-The user remains in control of committing, tagging and pushing. **Maybe TODO, make this automatic?**
+The DVC upload happens before the Git push, so a published tag cannot reference
+data that failed to upload. If only metadata changed, the script commits and
+pushes without creating a new dataset version tag. Valid DVC remote credentials
+must already be available in the environment.
 
 ---
 

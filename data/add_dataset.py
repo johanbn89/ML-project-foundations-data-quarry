@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Tuple
 
@@ -15,6 +17,8 @@ DATA_INDEX_MD = DATA_DIR / "README.md"
 
 # data/<dataset>/dvc/<component>/...
 DVC_SUBDIR_NAME = "dvc"
+GIT_REMOTE_NAME = "origin"
+DATASET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 README_TEMPLATE = r"""# Dataset: `{{ name }}`
@@ -241,20 +245,23 @@ def _find_all_dataset_meta() -> List[Dict[str, Any]]:
     return out
 
 
-def _read_bytes_if_exists(path: Path) -> bytes:
-    return path.read_bytes() if path.exists() else b""
-
-
 def _run(cmd: Iterable[str], *, cwd: Path) -> Tuple[int, str]:
     proc = subprocess.run(list(cmd), cwd=str(cwd), capture_output=True, text=True)
     out = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
     return proc.returncode, out.strip()
 
 
-def _run_dvc_add(path: Path) -> None:
-    rc, out = _run(["dvc", "add", str(path)], cwd=REPO_ROOT)
+def _run_checked(cmd: Iterable[str], *, error_context: str) -> str:
+    command = list(cmd)
+    rc, out = _run(command, cwd=REPO_ROOT)
     if rc != 0:
-        raise AddDatasetError(out or f"dvc add failed: {path}")
+        detail = f": {out}" if out else ""
+        raise AddDatasetError(f"{error_context}{detail}")
+    return out
+
+
+def _run_dvc_add(path: Path) -> None:
+    _run_checked(["dvc", "add", str(path)], error_context=f"dvc add failed for {path}")
 
 
 def _dvc_file_for_output_dir(output_dir: Path) -> Path:
@@ -262,36 +269,161 @@ def _dvc_file_for_output_dir(output_dir: Path) -> Path:
     return output_dir.with_suffix(".dvc")
 
 
+def _repo_relative(path: Path) -> str:
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
+def _path_differs_from_head(path: Path) -> bool:
+    relative_path = _repo_relative(path)
+    rc, out = _run(["git", "diff", "--quiet", "HEAD", "--", relative_path], cwd=REPO_ROOT)
+    if rc == 1:
+        return True
+    if rc != 0:
+        raise AddDatasetError(f"Unable to compare {relative_path} with HEAD: {out}")
+
+    rc, out = _run(["git", "ls-files", "--error-unmatch", "--", relative_path], cwd=REPO_ROOT)
+    if rc == 0:
+        return False
+    if rc == 1:
+        return path.exists()
+    raise AddDatasetError(f"Unable to inspect {relative_path}: {out}")
+
+
 def _dvc_add_dataset(dataset_dir: Path) -> Tuple[bool, Path]:
     dvc_output_dir = dataset_dir / DVC_SUBDIR_NAME
     dvc_output_dir.mkdir(parents=True, exist_ok=True)
 
     dvc_file = _dvc_file_for_output_dir(dvc_output_dir)
-
-    before = _read_bytes_if_exists(dvc_file)
-    existed_before = dvc_file.exists()
-
     _run_dvc_add(dvc_output_dir)
 
-    after = _read_bytes_if_exists(dvc_file)
+    return _path_differs_from_head(dvc_file), dvc_file
 
-    if not existed_before and dvc_file.exists():
-        return True, dvc_file
-    if before != after:
-        return True, dvc_file
-    return False, dvc_file
+
+def _dataset_dir(dataset_name: str) -> Path:
+    if not DATASET_NAME_PATTERN.fullmatch(dataset_name):
+        raise AddDatasetError(
+            "Dataset name must start with a letter or number and contain only letters, numbers, '.', '_', or '-'."
+        )
+    return DATA_DIR / dataset_name
+
+
+def _require_clean_index() -> None:
+    rc, out = _run(["git", "diff", "--cached", "--quiet"], cwd=REPO_ROOT)
+    if rc == 0:
+        return
+    if rc == 1:
+        raise AddDatasetError("Git index contains staged changes. Commit or unstage them before publishing a dataset.")
+    raise AddDatasetError(f"Unable to inspect the Git index: {out}")
+
+
+def _prepare_publication() -> str:
+    branch = _run_checked(
+        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+        error_context="Dataset publishing requires a checked-out Git branch",
+    )
+    _require_clean_index()
+    _run_checked(
+        ["git", "remote", "get-url", GIT_REMOTE_NAME],
+        error_context=f"Git remote '{GIT_REMOTE_NAME}' is not configured",
+    )
+    _run_checked(
+        ["git", "fetch", GIT_REMOTE_NAME, branch, "--tags"],
+        error_context=f"Unable to fetch {GIT_REMOTE_NAME}/{branch}",
+    )
+    counts = _run_checked(
+        ["git", "rev-list", "--left-right", "--count", f"HEAD...{GIT_REMOTE_NAME}/{branch}"],
+        error_context=f"Unable to compare HEAD with {GIT_REMOTE_NAME}/{branch}",
+    ).split()
+    if counts != ["0", "0"]:
+        ahead, behind = counts if len(counts) == 2 else ("?", "?")
+        raise AddDatasetError(
+            f"Current branch must match {GIT_REMOTE_NAME}/{branch} before publishing (ahead {ahead}, behind {behind})."
+        )
+    return branch
+
+
+def _next_tag_version(dataset_name: str) -> int:
+    prefix = f"{dataset_name}-v"
+    output = _run_checked(
+        ["git", "tag", "--list", f"{prefix}*"],
+        error_context=f"Unable to inspect tags for {dataset_name}",
+    )
+    versions: List[int] = []
+    for tag in output.splitlines():
+        suffix = tag.removeprefix(prefix)
+        if suffix.isdigit() and tag == f"{prefix}{suffix}":
+            versions.append(int(suffix))
+    return max(versions, default=0) + 1
+
+
+def _unstage(paths: Iterable[Path]) -> None:
+    relative_paths = [_repo_relative(path) for path in paths]
+    _run(["git", "reset", "--", *relative_paths], cwd=REPO_ROOT)
+
+
+def _push_dvc_data(dvc_file: Path, gitignore_path: Path) -> None:
+    dvc_relative = _repo_relative(dvc_file)
+    try:
+        _run_checked(["dvc", "push", dvc_relative], error_context=f"dvc push failed for {dvc_relative}")
+    except AddDatasetError:
+        _unstage([dvc_file, gitignore_path])
+        raise
+
+
+def _publish_git(
+    *,
+    dataset_name: str,
+    branch: str,
+    paths: Iterable[Path],
+    tag: str | None,
+) -> None:
+    publication_paths = list(paths)
+    relative_paths = [_repo_relative(path) for path in publication_paths]
+    _run_checked(
+        ["git", "add", "--", *relative_paths],
+        error_context="Unable to stage generated dataset files",
+    )
+
+    rc, out = _run(["git", "diff", "--cached", "--quiet"], cwd=REPO_ROOT)
+    if rc == 0:
+        print("[publish] no Git changes to commit")
+        return
+    if rc != 1:
+        raise AddDatasetError(f"Unable to inspect staged dataset files: {out}")
+
+    try:
+        _run_checked(
+            ["git", "commit", "-m", f"Add/update dataset {dataset_name}"],
+            error_context="Unable to commit dataset changes",
+        )
+    except AddDatasetError:
+        _unstage(publication_paths)
+        raise
+
+    push_command = ["git", "push", "--atomic", GIT_REMOTE_NAME, f"HEAD:refs/heads/{branch}"]
+    if tag is not None:
+        _run_checked(["git", "tag", tag], error_context=f"Unable to create tag {tag}")
+        push_command.append(f"refs/tags/{tag}:refs/tags/{tag}")
+
+    _run_checked(
+        push_command,
+        error_context=(
+            "Git push failed; the commit and any dataset tag remain local. "
+            "Resolve the remote issue and push them manually"
+        ),
+    )
+    print(f"[publish] pushed commit{' and ' + tag if tag else ''} to {GIT_REMOTE_NAME}/{branch}")
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(
-        description="Create/update dataset.yaml + README + data/README.md (auto-discover components)."
-    )
-    p.add_argument("--name", required=True, help="Dataset folder name under data/ (e.g. dataset1)")
-    p.add_argument("--status", default="draft", choices=["draft", "active", "deprecated"])
+    p = argparse.ArgumentParser(description="Create or update a dataset, version it, and publish it to DVC and Git.")
+    p.add_argument("name", help="Dataset folder name under data/ (e.g. dataset1)")
+    p.add_argument("--status", choices=["draft", "active", "deprecated"])
     p.add_argument("--description", default="", help="Dataset description shown in README (optional).")
     args = p.parse_args()
 
-    dataset_dir = DATA_DIR / args.name
+    dataset_dir = _dataset_dir(args.name)
+    branch = _prepare_publication()
     dataset_dir.mkdir(parents=True, exist_ok=True)
 
     today = dt.date.today().isoformat()
@@ -301,7 +433,10 @@ def main() -> int:
     meta.setdefault("created", today)
     meta["updated"] = today
     meta["name"] = args.name
-    meta["status"] = args.status
+    if args.status:
+        meta["status"] = args.status
+    else:
+        meta.setdefault("status", "draft")
 
     if args.description:
         meta["description"] = args.description
@@ -318,10 +453,14 @@ def main() -> int:
 
     changed_any, dvc_file = _dvc_add_dataset(dataset_dir)
     dvc_rel = dvc_file.relative_to(REPO_ROOT)
+    gitignore_path = dataset_dir / ".gitignore"
 
     if changed_any:
         print(f"[updated] {dvc_rel} changed")
-        tag_version += 1
+        tag_version = _next_tag_version(args.name)
+        current_tag = _dataset_tag(args.name, tag_version)
+        _push_dvc_data(dvc_file, gitignore_path)
+        print(f"[dvc] pushed data for {args.name}")
         meta["tag_version"] = tag_version
         print(f"[tag] data changed -> bump tag_version to v{tag_version}")
     else:
@@ -346,19 +485,19 @@ def main() -> int:
     _write_text(DATA_INDEX_MD, _render_data_index(all_meta))
     print(f"Updated {DATA_INDEX_MD.relative_to(REPO_ROOT)}")
 
-    print("\nNext:")
-    print(
-        f"  git add {meta_path.relative_to(REPO_ROOT)} {readme_path.relative_to(REPO_ROOT)} {DATA_INDEX_MD.relative_to(REPO_ROOT)}"
+    _publish_git(
+        dataset_name=args.name,
+        branch=branch,
+        paths=[meta_path, readme_path, DATA_INDEX_MD, dvc_file, gitignore_path],
+        tag=current_tag if changed_any else None,
     )
-    print(f"  git add {dvc_rel}")
-    print(f"  git add {dataset_dir.relative_to(REPO_ROOT)}/.gitignore")
-    print(f'  git commit -m "Add/update dataset {args.name}"')
-    if changed_any:
-        print(f"  git tag {current_tag}")
-        print(f"  # optionally push tag: git push origin {current_tag}")
 
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except AddDatasetError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
