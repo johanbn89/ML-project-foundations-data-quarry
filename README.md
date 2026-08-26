@@ -11,45 +11,46 @@ This repository combines application code (src/), dataset-specific developer uti
 
 ## Setup
 
-Install Python and project dependencies in an isolated environment and set up the data repository so it is easily discoverable by other repositories that depend on it.
+Run these commands from the root of this data repository:
 
 ```bash
 uv sync --all-groups
-uv run data-repo-setup
+uv run data-quarry setup
 ```
-### Administrator / Repo Owner (one-time or when changing remote)
 
-Run once from the repository root and commit the result:
+`data-quarry setup` stores `DATA_REPO_ROOT` for the current Windows user so that
+code in another repository can find this checkout. Restart the terminal after
+running it. The DVC data directory is derived as `DATA_REPO_ROOT/data`.
+
+### Repository owner: configure the shared DVC remote
+
+An administrator configures the remote once and commits it:
 
 ```bash
 uv run data-quarry set-dvc-remote --name storage --url s3://my-company-data/dvc --commit
+git push origin main
 ```
----
-### Required credentials / secrets per environment when using a remote
 
-#### Local development
-- Developers must configure credentials for the shared DVC remote locally
-- Credentials are **not** stored in `.dvc/config`
-- Typical mechanisms:
-  - Cloud provider CLIs (e.g. `aws configure`, `az login`, `gcloud auth login`) **most common**
-  - Environment variables
-  - Entries in `.dvc/config.local`
- 
-#### CI / automated environments
-- Credentials must be provided explicitly by the CI system
-- Common approaches:
-  - CI-managed secrets injected as environment variables
-  - Service accounts / IAM roles assigned to the runner
-  - Mounted credential files (never committed to the repo)
+The command adds or updates the default remote and stores it in `.dvc/config`.
+Re-running it with the same name changes the remote URL. `--commit` creates the
+Git commit but does not push it.
 
-#### Best practice:
-- Store secrets in the CI platform’s secret manager
-- Inject them at runtime
-- Do not rely on developer-local configuration in CI
+### Developers and CI
 
+Users do not configure the DVC remote. They receive `.dvc/config` through Git.
+The environment only needs valid credentials for the configured storage provider,
+for example through a cloud login, environment variables, or a CI workload identity.
+Secrets must not be committed to `.dvc/config`.
 
----
+Verify the remote and optionally pull a dataset manually with:
 
+```bash
+uv run dvc remote list
+uv run dvc pull data/<dataset>/dvc.dvc
+```
+
+Application code using `get_file_paths()` performs the required `dvc pull`
+automatically.
 
 ### Configure the DVC cache location
 

@@ -24,13 +24,13 @@ def set_dvc_remote(
     commit: bool = typer.Option(False, "--commit", help="Commit changes to git"),
 ) -> None:
     """
-    Configure a DVC remote.
+    Configure or update the default DVC remote.
     """
     require_repo_root()
 
-    typer.echo(f"Setting DVC remote '{name}' → {url}")
+    typer.echo(f"Setting DVC remote '{name}' -> {url}")
 
-    run(["dvc", "remote", "add", "-d", name, url])
+    run(["dvc", "remote", "add", "--default", "--force", name, url])
     run(["git", "add", ".dvc/config"])
 
     if commit:
