@@ -1,6 +1,5 @@
 # This may feel a bit overkill at first glance.
-# We currently derive only two paths from the repo root, and these could
-# technically be resolved at runtime when needed.
+# The repository root must be known before commands can execute from it.
 #
 # However, if we want to change the CWD to this repository, we must already
 # know where it is located. Centralizing this logic also makes it trivial
@@ -34,19 +33,16 @@ CONFIG_APP_NAME = "data-quarry"
 CONFIG_FILE_NAME = "config.toml"
 
 ENV_REPO_ROOT = "DATA_REPO_ROOT"
-ENV_DATA_ROOT = "DATA_ROOT"
 
 
 @dataclass(frozen=True)
 class DQConfig:
     repo_root: str
-    data_root: str
 
     @staticmethod
     def from_repo_root(repo_root: Path) -> "DQConfig":
         repo_root = repo_root.resolve()
-        data_root = (repo_root / "data").resolve()
-        return DQConfig(repo_root=str(repo_root), data_root=str(data_root))
+        return DQConfig(repo_root=str(repo_root))
 
 
 def _config_filepath() -> Path:
@@ -73,7 +69,6 @@ def _repo_root_from_cwd() -> Path:
 def _env_map(cfg: DQConfig) -> dict[str, str]:
     return {
         ENV_REPO_ROOT: cfg.repo_root,
-        ENV_DATA_ROOT: cfg.data_root,
     }
 
 
@@ -105,7 +100,6 @@ def setup() -> None:
 
     typer.echo(f"Config written: {cfg_path}")
     typer.echo(f"Repo root:      {cfg.repo_root}")
-    typer.echo(f"Data root:      {cfg.data_root}")
     typer.echo("")
     typer.echo("Environment variables persisted for USER:")
     for k in envs:

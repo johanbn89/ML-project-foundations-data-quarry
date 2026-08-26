@@ -203,15 +203,16 @@ Inputs
 - dataset — dataset folder name
 - components — list of component names (e.g. ["raw", "target"])
 
-Required environment variables
+Required environment variable
 
 - DATA_REPO_ROOT — path to the data repository root (where .git and DVC configuration live)
-- DATA_ROOT — path to the data/ directory inside that repository
+
+The data directory is derived as `DATA_REPO_ROOT/data`.
 
 Behavior
 
 1. All commands are executed from the correct working directory (CWD).
-   The CWD is resolved from environment variables and does not rely on the
+   The CWD is resolved from DATA_REPO_ROOT and does not rely on the
    caller’s current shell location.
 2. Run git checkout <ref>.
 3. Run dvc pull data/\<dataset\>/dvc.dvc.
@@ -221,7 +222,7 @@ Behavior
 
 This function mutates the repository working tree by design.
 It should be used only in controlled environments (local development, CI jobs, containers),
-where the correct behavior is enforced via the environment variables above.
+where the correct behavior is enforced via DATA_REPO_ROOT.
 
 
 ---
@@ -320,7 +321,7 @@ Runtime helpers (e.g. get_file_paths) intentionally mutate the data repo working
 - Document how to use this repository from another repository’s CI pipeline (e.g. GitHub Actions):
   - Check out the code repo
   - Check out this data repo into a subfolder (e.g. _data_repo) with tags (fetch-depth: 0)
-  - Set DATA_REPO_ROOT and DATA_ROOT to that checkout
+  - Set DATA_REPO_ROOT to that checkout
   - Run tests/integration steps that call get_file_paths()
   - (Optional) cache DVC cache to speed up repeated runs
 

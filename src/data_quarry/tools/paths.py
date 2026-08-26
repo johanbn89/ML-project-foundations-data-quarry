@@ -32,7 +32,7 @@ def get_file_paths(
       files = get_file_paths(dataset="dataset2", ref="dataset2-v3", components=["raw", "target"])
     """
     repo_root = Path(_require_env("DATA_REPO_ROOT")).resolve()
-    data_root = Path(_require_env("DATA_ROOT")).resolve()
+    data_root = repo_root / "data"
 
     dataset_dir = data_root / dataset
     if not dataset_dir.is_dir():
